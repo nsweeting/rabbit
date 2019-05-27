@@ -1,8 +1,6 @@
 defmodule Rabbit.Producer.Pool do
   @moduledoc false
 
-  alias Rabbit.Producer.Worker
-
   ################################
   # Public API
   ################################
@@ -26,7 +24,7 @@ defmodule Rabbit.Producer.Pool do
   def publish(producer, exchange, routing_key, payload, opts \\ [], timeout \\ 5_000) do
     :poolboy.transaction(
       producer,
-      &Worker.publish(&1, exchange, routing_key, payload, opts, timeout)
+      &Rabbit.Producer.Server.publish(&1, exchange, routing_key, payload, opts, timeout)
     )
   end
 
@@ -37,7 +35,7 @@ defmodule Rabbit.Producer.Pool do
   defp config(name, opts) do
     [
       {:name, {:local, name}},
-      {:worker_module, Worker},
+      {:worker_module, Rabbit.Producer.Server},
       {:size, opts[:pool_size]},
       {:max_overflow, opts[:max_overflow]}
     ]

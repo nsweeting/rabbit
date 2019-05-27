@@ -41,5 +41,7 @@ defmodule Rabbit.Consumer do
     Rabbit.Consumer.Supervisor.start_link(consumer, connection, opts)
   end
 
-  defdelegate ack(message, opts \\ []), to: Rabbit.Consumer.Worker
+  def ack(message, opts \\ []) do
+    Rabbit.Consumer.Server.ack(message, opts)
+  end
 end

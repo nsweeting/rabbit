@@ -58,30 +58,34 @@ defmodule Rabbit.Connection do
     end
   end
 
-  @spec start_link(Rabbit.Connection.t(), Rabbit.Connection.options()) :: GenServer.on_start()
+  ################################
+  # Public API
+  ################################
+
+  @doc false
   def start_link(connection, opts \\ []) do
-    Rabbit.Connection.Worker.start_link(connection, opts)
-  end
-
-  @spec subscribe(Rabbit.Connection.t(), pid() | nil) :: :ok
-  def subscribe(connection, subscriber \\ nil) do
-    Rabbit.Connection.Worker.subscribe(connection, subscriber)
-  end
-
-  @spec unsubscribe(Rabbit.Connection.t(), pid() | nil) :: :ok
-  def unsubscribe(connection, subscriber \\ nil) do
-    Rabbit.Connection.Worker.unsubscribe(connection, subscriber)
+    Rabbit.Connection.Server.start_link(connection, opts)
   end
 
   @doc false
-  def valid?(connection) when is_atom(connection) do
-    Code.ensure_loaded?(connection) and
-      connection.module_info[:attributes]
-      |> Keyword.get(:behaviour, [])
-      |> Enum.member?(__MODULE__)
+  def subscribe(connection, subscriber \\ nil) do
+    subscriber = subscriber || self()
+
+    try do
+      Rabbit.Connection.Server.subscribe(connection, subscriber)
+    catch
+      msg, reason -> {:error, {msg, reason}}
+    end
   end
 
-  def valid?(_) do
-    false
+  @doc false
+  def unsubscribe(connection, subscriber \\ nil) do
+    subscriber = subscriber || self()
+
+    try do
+      Rabbit.Connection.Server.unsubscribe(connection, subscriber)
+    catch
+      msg, reason -> {:error, {msg, reason}}
+    end
   end
 end

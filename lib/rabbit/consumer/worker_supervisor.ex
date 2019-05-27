@@ -1,9 +1,7 @@
-defmodule Rabbit.Consumer.HandlerSupervisor do
+defmodule Rabbit.Consumer.WorkerSupervisor do
   @moduledoc false
 
   use DynamicSupervisor
-
-  alias Rabbit.Consumer.Handler
 
   ################################
   # Public API
@@ -23,8 +21,9 @@ defmodule Rabbit.Consumer.HandlerSupervisor do
   end
 
   @doc false
-  def start_child(handler, message, opts \\ []) do
-    DynamicSupervisor.start_child(handler, {Handler, [message, opts]})
+  def start_child(worker, message, opts \\ []) do
+    child = {Rabbit.Consumer.Worker, [message, opts]}
+    DynamicSupervisor.start_child(worker, child)
   end
 
   ################################

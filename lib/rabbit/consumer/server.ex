@@ -1,24 +1,51 @@
-defmodule Rabbit.Producer.Worker do
-  @moduledoc false
-
+defmodule Rabbit.Consumer.Server do
   use GenServer
 
   require Logger
 
-  alias Rabbit.Serializer
+  @qos_opts [
+    :prefetch_size,
+    :prefetch_count,
+    :global
+  ]
+  @consume_opts [
+    :consumer_tag,
+    :no_local,
+    :no_ack,
+    :exclusive,
+    :no_wait,
+    :arguments
+  ]
+  @queue_opts [
+    :durable,
+    :passive,
+    :auto_delete
+  ]
+  @worker_opts [
+    :serializers,
+    :timeout
+  ]
 
   ################################
   # Public API
   ################################
 
   @doc false
-  def start_link(opts) do
-    GenServer.start_link(__MODULE__, opts)
+  def child_spec(args) do
+    %{
+      id: __MODULE__,
+      start: {__MODULE__, :start_link, args}
+    }
   end
 
   @doc false
-  def publish(worker, exchange, routing_key, payload, opts \\ [], timeout \\ 5_000) do
-    GenServer.call(worker, {:publish, exchange, routing_key, payload, opts}, timeout)
+  def start_link(consumer, connection, opts \\ []) do
+    GenServer.start_link(__MODULE__, {consumer, connection, opts}, name: consumer)
+  end
+
+  @doc false
+  def ack(message, opts \\ []) do
+    GenServer.cast(message.consumer, {:ack, message.meta.delivery_tag, opts})
   end
 
   ################################
@@ -27,15 +54,15 @@ defmodule Rabbit.Producer.Worker do
 
   @doc false
   @impl GenServer
-  def init(opts) do
-    state = init_state(opts)
+  def init({consumer, connection, opts}) do
+    state = init_state(consumer, connection, opts)
     {:ok, state, {:continue, :connection}}
   end
 
   @doc false
   @impl GenServer
   def handle_continue(:connection, state) do
-    case connection(state) do
+    case connection(state) |> IO.inspect() do
       {:ok, state} -> {:noreply, state}
       {:error, state} -> {:noreply, state, {:continue, :restart_delay}}
     end
@@ -43,6 +70,13 @@ defmodule Rabbit.Producer.Worker do
 
   def handle_continue({:channel, connection}, state) do
     case channel(state, connection) do
+      {:ok, state} -> {:noreply, state, {:continue, :consume}}
+      {:error, state} -> {:noreply, state, {:continue, :restart_delay}}
+    end
+  end
+
+  def handle_continue(:consume, state) do
+    case consume(state) do
       {:ok, state} -> {:noreply, state}
       {:error, state} -> {:noreply, state, {:continue, :restart_delay}}
     end
@@ -51,17 +85,6 @@ defmodule Rabbit.Producer.Worker do
   def handle_continue(:restart_delay, state) do
     state = restart_delay(state)
     {:noreply, state}
-  end
-
-  @doc false
-  @impl GenServer
-  def handle_call(_msg, _from, %{channel: nil} = state) do
-    {:reply, {:error, :not_connected}, state}
-  end
-
-  def handle_call({:publish, exchange, routing_key, payload, opts}, _from, state) do
-    result = perform_publish(state, exchange, routing_key, payload, opts)
-    {:reply, result, state}
   end
 
   @doc false
@@ -79,22 +102,45 @@ defmodule Rabbit.Producer.Worker do
     {:noreply, state, {:continue, :connection}}
   end
 
+  def handle_info({:basic_consume_ok, _info}, state) do
+    {:noreply, state}
+  end
+
+  def handle_info({:basic_deliver, payload, meta}, state) do
+    handle_message(state, payload, meta)
+    {:noreply, state}
+  end
+
   def handle_info({:DOWN, _ref, :process, _pid, reason}, state) do
     state = channel_down(state, reason)
     {:noreply, state, {:continue, :restart_delay}}
   end
 
+  @doc false
+  @impl GenServer
+  def handle_cast({:ack, delivery_tag, opts}, state) do
+    perform_ack(state, delivery_tag, opts)
+    {:noreply, state}
+  end
+
   ################################
-  # Private API
+  # Private Helpers
   ################################
 
-  defp init_state(opts) do
-    opts
-    |> Enum.into(%{})
-    |> Map.merge(%{
+  defp init_state(consumer, connection, opts) do
+    %{
+      name: consumer,
+      consumer: consumer,
+      connection: connection,
       channel: nil,
-      restart_attempts: 0
-    })
+      restart_attempts: 0,
+      worker: Keyword.get(opts, :worker),
+      queue: Keyword.get(opts, :queue),
+      queue_opts: Keyword.take(opts, @queue_opts),
+      qos_opts: Keyword.take(opts, @qos_opts),
+      consume_opts: Keyword.take(opts, @consume_opts),
+      worker_opts: Keyword.take(opts, @worker_opts)
+    }
   end
 
   defp connection(state) do
@@ -129,6 +175,22 @@ defmodule Rabbit.Producer.Worker do
     {:ok, state}
   end
 
+  defp consume(state) do
+    with {:ok, _} <- AMQP.Queue.declare(state.channel, state.queue, state.queue_opts),
+         :ok <- AMQP.Basic.qos(state.channel, state.qos_opts),
+         {:ok, _} <- AMQP.Basic.consume(state.channel, state.queue, self(), state.consume_opts) do
+      Logger.info("""
+      #{inspect(state.name)}: consumer started.
+      """)
+
+      {:ok, state}
+    else
+      error ->
+        log_error(state, error)
+        {:error, state}
+    end
+  end
+
   defp restart_delay(state) do
     restart_attempts = state.restart_attempts + 1
     delay = calculate_delay(restart_attempts)
@@ -153,26 +215,18 @@ defmodule Rabbit.Producer.Worker do
     1000 * attempt
   end
 
-  defp perform_publish(state, exchange, routing_key, payload, opts) do
-    opts = Keyword.merge(state.publish_opts, opts)
-
-    with {:ok, payload} <- encode_payload(state.serializers, payload, opts) do
-      AMQP.Basic.publish(state.channel, exchange, routing_key, payload, opts)
-    end
+  defp handle_message(state, payload, meta) do
+    message = Rabbit.Message.new(state.consumer, state.channel, payload, meta)
+    Rabbit.Consumer.WorkerSupervisor.start_child(state.worker, message, state.worker_opts)
   end
 
-  defp encode_payload(serializers, payload, opts) do
-    with {:ok, content_type} when is_binary(content_type) <- Keyword.fetch(opts, :content_type),
-         {:ok, serializer} when is_atom(serializer) <- Map.fetch(serializers, content_type) do
-      Serializer.encode(serializer, payload)
-    else
-      :error -> {:ok, payload}
-    end
+  defp perform_ack(state, delivery_tag, opts) do
+    AMQP.Basic.ack(state.channel, delivery_tag, opts)
   end
 
   defp log_error(state, error) do
     Logger.error("""
-    #{inspect(state.producer)}: producer error.
+    #{inspect(state.name)}: consumer error.
     Detail: #{inspect(error)}
     """)
   end

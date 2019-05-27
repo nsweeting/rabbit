@@ -25,7 +25,8 @@ defmodule Rabbit.MixProject do
       {:poolboy, "~> 1.5"},
       {:keyword_validator, "~> 0.2"},
       {:jason, "~> 1.1", optional: true},
-      {:benchee, "~> 1.0", only: :dev}
+      {:benchee, "~> 1.0", only: :dev},
+      {:credo, "~> 1.0.0", only: [:dev, :test], runtime: false}
     ]
   end
 end

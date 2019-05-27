@@ -3,8 +3,6 @@ defmodule Rabbit.Consumer.Supervisor do
 
   use Supervisor
 
-  alias Rabbit.Consumer.{HandlerSupervisor, Worker}
-
   @opts %{
     queue: [type: :binary, required: true],
     serializers: [type: :map, default: Rabbit.Serializer.defaults()],
@@ -38,16 +36,16 @@ defmodule Rabbit.Consumer.Supervisor do
   @impl Supervisor
   def init({consumer, connection, opts}) do
     with {:ok, opts} <- consumer_init(consumer, opts) do
-      handler = handler_name(consumer)
+      worker = Module.concat(consumer, Worker)
 
       opts =
         opts
         |> KeywordValidator.validate!(@opts)
-        |> Keyword.put(:handler, handler)
+        |> Keyword.put(:worker, worker)
 
       children = [
-        {Worker, [consumer, connection, opts]},
-        {HandlerSupervisor, [handler]}
+        {Rabbit.Consumer.WorkerSupervisor, [worker]},
+        {Rabbit.Consumer.Server, [consumer, connection, opts]}
       ]
 
       Supervisor.init(children, strategy: :one_for_one)
@@ -64,9 +62,5 @@ defmodule Rabbit.Consumer.Supervisor do
     else
       {:ok, opts}
     end
-  end
-
-  defp handler_name(module) do
-    Module.concat(module, Handler)
   end
 end

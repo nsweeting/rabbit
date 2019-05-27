@@ -76,6 +76,10 @@ defmodule Rabbit.Producer do
           timeout()
         ) :: :ok | {:error, any()}
   def publish(producer, exchange, routing_key, message, opts \\ [], timeout \\ 5_000) do
-    Rabbit.Producer.Pool.publish(producer, exchange, routing_key, message, opts, timeout)
+    try do
+      Rabbit.Producer.Pool.publish(producer, exchange, routing_key, message, opts, timeout)
+    catch
+      msg, reason -> {:error, {msg, reason}}
+    end
   end
 end
