@@ -25,6 +25,10 @@ defmodule Rabbit.Consumer.Supervisor do
 
   @doc false
   def start_link(consumer, connection, opts \\ []) do
+    unless export_callback?(consumer, :handle_message, 1) do
+      raise ArgumentError, "#{inspect(consumer)} must export a handle_message/1 callback"
+    end
+
     Supervisor.start_link(__MODULE__, {consumer, connection, opts})
   end
 
@@ -57,10 +61,14 @@ defmodule Rabbit.Consumer.Supervisor do
   ################################
 
   defp consumer_init(consumer, opts) do
-    if Code.ensure_loaded?(consumer) and function_exported?(consumer, :init, 1) do
+    if export_callback?(consumer, :init, 1) do
       consumer.init(opts)
     else
       {:ok, opts}
     end
+  end
+
+  defp export_callback?(consumer, callback, arity) do
+    Code.ensure_loaded?(consumer) and function_exported?(consumer, callback, arity)
   end
 end
