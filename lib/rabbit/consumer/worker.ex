@@ -1,9 +1,9 @@
 defmodule Rabbit.Consumer.Worker do
+  @moduledoc false
+
   use GenServer
 
   require Logger
-
-  alias Rabbit.ConsumerError
 
   @opts %{
     timeout: [type: :integer, default: 30_000],
@@ -14,6 +14,7 @@ defmodule Rabbit.Consumer.Worker do
   # Public API
   ################################
 
+  @doc false
   def child_spec(args) do
     %{
       id: __MODULE__,
@@ -36,6 +37,7 @@ defmodule Rabbit.Consumer.Worker do
   @impl GenServer
   def init({message, opts}) do
     state = init_state(message, opts)
+    set_timeout(state.timeout)
     {:ok, state, {:continue, :execute}}
   end
 
@@ -48,20 +50,12 @@ defmodule Rabbit.Consumer.Worker do
 
   @doc false
   @impl GenServer
-  def handle_cast(:complete, state) do
-    {:stop, :normal, state}
-  end
-
-  @doc false
-  @impl GenServer
-  def handle_info({:DOWN, _, :process, _, :normal}, state) do
-    {:stop, :normal, state}
-  end
-
-  @doc false
-  @impl GenServer
   def handle_info(:timeout, state) do
-    timeout_error(state)
+    if is_pid(state.executer), do: Process.exit(state.executer, :timeout)
+    {:noreply, state}
+  end
+
+  def handle_info({:EXIT, _, _}, state) do
     {:stop, :normal, state}
   end
 
@@ -73,45 +67,45 @@ defmodule Rabbit.Consumer.Worker do
     opts
     |> Enum.into(%{})
     |> Map.merge(%{
-      runner: nil,
+      executer: nil,
       message: message
     })
   end
 
+  defp set_timeout(:infinite) do
+    :ok
+  end
+
+  defp set_timeout(timeout) do
+    Process.send_after(self(), :timeout, timeout)
+  end
+
   defp execute(state) do
     Process.flag(:trap_exit, true)
-    handler = self()
 
-    runner =
+    executer =
       spawn_link(fn ->
         try do
           message = decode_payload!(state.serializers, state.message)
-          consumer_execute(state, :handle_message, [message])
+          consumer_callback(state, :handle_message, [message])
         rescue
-          exception ->
-            error = ConsumerError.new(state.message, :exception, exception, __STACKTRACE__)
-            handle_error(state, error)
+          exception -> handle_error(state, :exception, exception, __STACKTRACE__)
+        catch
+          msg, reason -> handle_error(state, msg, reason, __STACKTRACE__)
         end
-
-        GenServer.cast(handler, :complete)
       end)
 
-    %{state | runner: runner}
+    %{state | executer: executer}
   end
 
-  defp consumer_execute(state, fun, args) do
-    apply(state.message.consumer, fun, args)
+  defp consumer_callback(state, fun, args) do
+    apply(state.message.consumer, fun, args) |> handle_result()
   end
 
-  defp timeout_error(state) do
-    if is_pid(state.runner), do: Process.exit(state.runner, :timeout)
-    error = ConsumerError.new(state.message, :error, :timeout, [])
-    handle_error(state, error)
-  end
-
-  defp handle_error(state, error) do
-    ConsumerError.log(error)
-    consumer_execute(state, :handle_error, [error])
+  defp handle_error(state, kind, reason, stack) do
+    error = Rabbit.ConsumerError.new(state.message, kind, reason, stack)
+    Rabbit.ConsumerError.log(error)
+    consumer_callback(state, :handle_error, [error])
   end
 
   defp decode_payload!(serializers, message) do
@@ -124,4 +118,12 @@ defmodule Rabbit.Consumer.Worker do
         message
     end
   end
+
+  defp handle_result({:ack, message}), do: Rabbit.Consumer.ack(message)
+  defp handle_result({:ack, message, opts}), do: Rabbit.Consumer.ack(message, opts)
+  defp handle_result({:nack, message}), do: Rabbit.Consumer.nack(message)
+  defp handle_result({:nack, message, opts}), do: Rabbit.Consumer.nack(message, opts)
+  defp handle_result({:reject, message}), do: Rabbit.Consumer.reject(message)
+  defp handle_result({:reject, message, opts}), do: Rabbit.Consumer.reject(message, opts)
+  defp handle_result(other), do: other
 end

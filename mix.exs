@@ -14,7 +14,8 @@ defmodule Rabbit.MixProject do
   # Run "mix help compile.app" to learn about applications.
   def application do
     [
-      extra_applications: [:lager, :logger]
+      extra_applications: [:lager, :logger],
+      mod: {Rabbit, []}
     ]
   end
 

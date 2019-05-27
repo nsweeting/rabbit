@@ -70,20 +70,22 @@ defmodule Rabbit.Connection do
   @doc false
   def subscribe(connection, subscriber \\ nil) do
     subscriber = subscriber || self()
-
-    try do
-      Rabbit.Connection.Server.subscribe(connection, subscriber)
-    catch
-      msg, reason -> {:error, {msg, reason}}
-    end
+    safe_call(:subscribe, [connection, subscriber])
   end
 
   @doc false
   def unsubscribe(connection, subscriber \\ nil) do
     subscriber = subscriber || self()
+    safe_call(:unsubscribe, [connection, subscriber])
+  end
 
+  ################################
+  # Private API
+  ################################
+
+  defp safe_call(function, args) do
     try do
-      Rabbit.Connection.Server.unsubscribe(connection, subscriber)
+      apply(Rabbit.Connection.Server, function, args)
     catch
       msg, reason -> {:error, {msg, reason}}
     end

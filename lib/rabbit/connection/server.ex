@@ -73,8 +73,8 @@ defmodule Rabbit.Connection.Server do
 
   @doc false
   @impl GenServer
-  def handle_info({:DOWN, ref, :process, pid, reason}, state) do
-    state = cleanup(state, ref, pid, reason)
+  def handle_info({:DOWN, _ref, :process, pid, reason}, state) do
+    state = cleanup(state, pid, reason)
     {:noreply, state, {:continue, :cleanup}}
   end
 
@@ -90,7 +90,7 @@ defmodule Rabbit.Connection.Server do
   end
 
   def handle_call({:unsubscribe, subscriber}, _from, state) do
-    state = perform_unsubscribe(state, subscriber)
+    state = cleanup(state, subscriber, :unsubscribe)
     {:noreply, :ok, state}
   end
 
@@ -126,19 +126,23 @@ defmodule Rabbit.Connection.Server do
   end
 
   defp monitor(state, pid, type) do
-    ref = Process.monitor(pid)
-    %{state | monitors: Map.put(state.monitors, ref, type)}
+    unless Map.has_key?(state.monitors, pid) do
+      Process.monitor(pid)
+      %{state | monitors: Map.put(state.monitors, pid, type)}
+    else
+      state
+    end
   end
 
-  defp cleanup(state, ref, pid, reason) do
+  defp cleanup(state, pid, reason) do
     state =
-      case Map.get(state.monitors, ref) do
+      case Map.get(state.monitors, pid) do
         :connection -> connection_down(state, reason)
         :subscriber -> subscriber_down(state, pid)
         _ -> state
       end
 
-    %{state | monitors: Map.delete(state.monitors, ref)}
+    %{state | monitors: Map.delete(state.monitors, pid)}
   end
 
   defp connection_down(state, reason) do
@@ -176,10 +180,6 @@ defmodule Rabbit.Connection.Server do
     state = %{state | subscribers: MapSet.put(state.subscribers, subscriber)}
     publish([subscriber], {:connected, state.connection})
     state
-  end
-
-  defp perform_unsubscribe(state, subscriber) do
-    %{state | subscribers: MapSet.delete(state.subscribers, subscriber)}
   end
 
   defp publish_connected(state_or_subscribers, connection) do

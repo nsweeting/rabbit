@@ -9,6 +9,7 @@ defmodule Rabbit.Message do
 
   @type t :: %__MODULE__{}
 
+  @spec new(Rabbit.Consumer.t(), AMQP.Channel.t(), any(), map()) :: Rabbit.Message.t()
   def new(consumer, channel, payload, meta) do
     %__MODULE__{
       consumer: consumer,

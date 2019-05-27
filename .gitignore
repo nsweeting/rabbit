@@ -25,3 +25,5 @@ erl_crash.dump
 # Ignore package tarball (built via "mix hex.build").
 rabbit-*.tar
 
+# Ignore asdf tool versions file
+.tool-versions

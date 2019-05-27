@@ -1,4 +1,6 @@
 defmodule Rabbit.Consumer.Server do
+  @moduledoc false
+
   use GenServer
 
   require Logger
@@ -15,11 +17,6 @@ defmodule Rabbit.Consumer.Server do
     :exclusive,
     :no_wait,
     :arguments
-  ]
-  @queue_opts [
-    :durable,
-    :passive,
-    :auto_delete
   ]
   @worker_opts [
     :serializers,
@@ -48,6 +45,16 @@ defmodule Rabbit.Consumer.Server do
     GenServer.cast(message.consumer, {:ack, message.meta.delivery_tag, opts})
   end
 
+  @doc false
+  def nack(message, opts \\ []) do
+    GenServer.cast(message.consumer, {:nack, message.meta.delivery_tag, opts})
+  end
+
+  @doc false
+  def reject(message, opts \\ []) do
+    GenServer.cast(message.consumer, {:reject, message.meta.delivery_tag, opts})
+  end
+
   ################################
   # GenServer Callbacks
   ################################
@@ -62,7 +69,7 @@ defmodule Rabbit.Consumer.Server do
   @doc false
   @impl GenServer
   def handle_continue(:connection, state) do
-    case connection(state) |> IO.inspect() do
+    case connection(state) do
       {:ok, state} -> {:noreply, state}
       {:error, state} -> {:noreply, state, {:continue, :restart_delay}}
     end
@@ -70,6 +77,13 @@ defmodule Rabbit.Consumer.Server do
 
   def handle_continue({:channel, connection}, state) do
     case channel(state, connection) do
+      {:ok, state} -> {:noreply, state, {:continue, :after_connect}}
+      {:error, state} -> {:noreply, state, {:continue, :restart_delay}}
+    end
+  end
+
+  def handle_continue(:after_connect, state) do
+    case after_connect(state) do
       {:ok, state} -> {:noreply, state, {:continue, :consume}}
       {:error, state} -> {:noreply, state, {:continue, :restart_delay}}
     end
@@ -123,6 +137,16 @@ defmodule Rabbit.Consumer.Server do
     {:noreply, state}
   end
 
+  def handle_cast({:nack, delivery_tag, opts}, state) do
+    perform_nack(state, delivery_tag, opts)
+    {:noreply, state}
+  end
+
+  def handle_cast({:reject, delivery_tag, opts}, state) do
+    perform_reject(state, delivery_tag, opts)
+    {:noreply, state}
+  end
+
   ################################
   # Private Helpers
   ################################
@@ -136,7 +160,6 @@ defmodule Rabbit.Consumer.Server do
       restart_attempts: 0,
       worker: Keyword.get(opts, :worker),
       queue: Keyword.get(opts, :queue),
-      queue_opts: Keyword.take(opts, @queue_opts),
       qos_opts: Keyword.take(opts, @qos_opts),
       consume_opts: Keyword.take(opts, @consume_opts),
       worker_opts: Keyword.take(opts, @worker_opts)
@@ -175,9 +198,19 @@ defmodule Rabbit.Consumer.Server do
     {:ok, state}
   end
 
+  defp after_connect(state) do
+    case apply(state.consumer, :after_connect, [state.channel, state.queue]) do
+      :ok ->
+        {:ok, state}
+
+      error ->
+        log_error(state, error)
+        {:error, state}
+    end
+  end
+
   defp consume(state) do
-    with {:ok, _} <- AMQP.Queue.declare(state.channel, state.queue, state.queue_opts),
-         :ok <- AMQP.Basic.qos(state.channel, state.qos_opts),
+    with :ok <- AMQP.Basic.qos(state.channel, state.qos_opts),
          {:ok, _} <- AMQP.Basic.consume(state.channel, state.queue, self(), state.consume_opts) do
       Logger.info("""
       #{inspect(state.name)}: consumer started.
@@ -222,6 +255,14 @@ defmodule Rabbit.Consumer.Server do
 
   defp perform_ack(state, delivery_tag, opts) do
     AMQP.Basic.ack(state.channel, delivery_tag, opts)
+  end
+
+  defp perform_nack(state, delivery_tag, opts) do
+    AMQP.Basic.nack(state.channel, delivery_tag, opts)
+  end
+
+  defp perform_reject(state, delivery_tag, opts) do
+    AMQP.Basic.reject(state.channel, delivery_tag, opts)
   end
 
   defp log_error(state, error) do

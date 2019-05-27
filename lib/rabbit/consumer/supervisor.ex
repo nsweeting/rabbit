@@ -13,10 +13,7 @@ defmodule Rabbit.Consumer.Supervisor do
     no_ack: [type: :boolean, default: false],
     exclusive: [type: :boolean, default: false],
     no_wait: [type: :boolean, default: false],
-    arguments: [type: :list, default: []],
-    durable: [type: :boolean, default: false],
-    passive: [type: :boolean, default: false],
-    auto_delete: [type: :boolean, default: false]
+    arguments: [type: :list, default: []]
   }
 
   ################################
@@ -25,8 +22,8 @@ defmodule Rabbit.Consumer.Supervisor do
 
   @doc false
   def start_link(consumer, connection, opts \\ []) do
-    unless export_callback?(consumer, :handle_message, 1) do
-      raise ArgumentError, "#{inspect(consumer)} must export a handle_message/1 callback"
+    unless valid_consumer?(consumer) do
+      raise ArgumentError, "#{inspect(consumer)} must export Rabbit.Consumer callbacks"
     end
 
     Supervisor.start_link(__MODULE__, {consumer, connection, opts})
@@ -60,15 +57,20 @@ defmodule Rabbit.Consumer.Supervisor do
   # Private API
   ################################
 
+  defp valid_consumer?(consumer) do
+    export_callback?(consumer, :handle_message, 1) and
+      export_callback?(consumer, :handle_error, 1)
+  end
+
+  defp export_callback?(consumer, callback, arity) do
+    Code.ensure_loaded?(consumer) and function_exported?(consumer, callback, arity)
+  end
+
   defp consumer_init(consumer, opts) do
     if export_callback?(consumer, :init, 1) do
       consumer.init(opts)
     else
       {:ok, opts}
     end
-  end
-
-  defp export_callback?(consumer, callback, arity) do
-    Code.ensure_loaded?(consumer) and function_exported?(consumer, callback, arity)
   end
 end

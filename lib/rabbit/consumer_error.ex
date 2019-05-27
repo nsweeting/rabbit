@@ -1,10 +1,13 @@
 defmodule Rabbit.ConsumerError do
+  @moduledoc false
+
   require Logger
 
   defexception [:message, :kind, :reason, :stack]
 
   @type t :: %__MODULE__{}
 
+  @doc false
   def new(message, kind, reason, stack) do
     %__MODULE__{
       message: message,
@@ -14,9 +17,10 @@ defmodule Rabbit.ConsumerError do
     }
   end
 
+  @doc false
   def log(error) do
     Logger.error("""
-    #{inspect(error.message.consumer)}: consumer error.
+    #{inspect(error.message.consumer)}: worker error.
 
     Reason:
         #{do_inspect(error.reason)}
@@ -25,8 +29,10 @@ defmodule Rabbit.ConsumerError do
         #{do_payload(error.message)}
 
     Consumer:
-        - Queue: #{error.message.meta.routing_key}
-        - PID: #{inspect(self())}
+        - Worker: #{inspect(self())}
+        - Exchange: #{error.message.meta.exchange}
+        - Routing key: #{error.message.meta.routing_key}
+
     #{do_stacktrace(error.stack)}
     """)
   end
@@ -35,12 +41,12 @@ defmodule Rabbit.ConsumerError do
     inspect(arg, pretty: true, width: 100)
   end
 
-  defp do_payload(%{assigns: %{decoded_payload: payload}}) do
+  defp do_payload(%{payload: payload, decoded_payload: nil}) do
     do_inspect(payload)
   end
 
-  defp do_payload(message) do
-    do_inspect(message.payload)
+  defp do_payload(%{payload: payload}) do
+    do_inspect(payload)
   end
 
   defp do_stacktrace([]) do
