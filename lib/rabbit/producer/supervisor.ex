@@ -3,7 +3,10 @@ defmodule Rabbit.Producer.Supervisor do
 
   use Supervisor
 
+  import Rabbit.Utilities
+
   @opts %{
+    name: [type: [:atom, :tuple], required: false],
     pool_size: [type: :integer, default: 1],
     max_overflow: [type: :integer, default: 0],
     serializers: [type: :map, default: Rabbit.Serializer.defaults()],
@@ -15,8 +18,8 @@ defmodule Rabbit.Producer.Supervisor do
   ################################
 
   @doc false
-  def start_link(producer, connection, opts \\ []) do
-    Supervisor.start_link(__MODULE__, {producer, connection, opts})
+  def start_link(connection, opts \\ []) do
+    Supervisor.start_link(__MODULE__, {connection, opts})
   end
 
   ################################
@@ -25,12 +28,12 @@ defmodule Rabbit.Producer.Supervisor do
 
   @doc false
   @impl Supervisor
-  def init({producer, connection, opts}) do
-    with {:ok, opts} <- producer_init(producer, opts) do
+  def init({connection, opts}) do
+    with {:ok, opts} <- producer_init(opts) do
       opts = KeywordValidator.validate!(opts, @opts)
 
       children = [
-        {Rabbit.Producer.Pool, [producer, connection, opts]}
+        {Rabbit.Producer.Pool, [connection, opts]}
       ]
 
       Supervisor.init(children, strategy: :one_for_one)
@@ -41,9 +44,11 @@ defmodule Rabbit.Producer.Supervisor do
   # Private API
   ################################
 
-  defp producer_init(producer, opts) do
-    if Code.ensure_loaded?(producer) and function_exported?(producer, :init, 1) do
-      producer.init(opts)
+  defp producer_init(opts) do
+    {module, opts} = Keyword.pop(opts, :module)
+
+    if callback_exported?(module, :init, 1) do
+      module.init(opts)
     else
       {:ok, opts}
     end

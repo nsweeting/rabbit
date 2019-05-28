@@ -1,4 +1,4 @@
-defmodule Rabbit.Consumer.WorkerSupervisor do
+defmodule Rabbit.WorkerSupervisor do
   @moduledoc false
 
   use DynamicSupervisor
@@ -16,14 +16,14 @@ defmodule Rabbit.Consumer.WorkerSupervisor do
   end
 
   @doc false
-  def start_link(name) do
-    DynamicSupervisor.start_link(__MODULE__, [], name: name)
+  def start_link do
+    DynamicSupervisor.start_link(__MODULE__, [], name: __MODULE__)
   end
 
   @doc false
-  def start_child(worker, message, opts \\ []) do
-    child = {Rabbit.Consumer.Worker, [message, opts]}
-    DynamicSupervisor.start_child(worker, child)
+  def start_child(message, opts \\ []) do
+    child = {Rabbit.Worker, [message, opts]}
+    DynamicSupervisor.start_child(__MODULE__, child)
   end
 
   ################################

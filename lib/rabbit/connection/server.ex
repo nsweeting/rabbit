@@ -5,23 +5,14 @@ defmodule Rabbit.Connection.Server do
 
   require Logger
 
-  @default_state %{
-    name: nil,
-    opts: nil,
-    connection: nil,
-    monitors: %{},
-    subscribers: MapSet.new(),
-    restart_attempts: 0
-  }
-
   ################################
   # Public API
   ################################
 
   @doc false
-  def start_link(connection, opts \\ [])
-      when is_atom(connection) and (is_binary(opts) or is_list(opts)) do
-    GenServer.start_link(__MODULE__, {connection, opts}, name: connection)
+  def start_link(opts \\ []) do
+    server_opts = Keyword.take(opts, [:name])
+    GenServer.start_link(__MODULE__, opts, server_opts)
   end
 
   @doc false
@@ -42,9 +33,11 @@ defmodule Rabbit.Connection.Server do
 
   @doc false
   @impl GenServer
-  def init({connection, opts}) do
-    with {:ok, opts} <- connection_init(connection, opts) do
-      state = %{@default_state | name: connection, opts: opts}
+  def init(opts) do
+    {name, opts} = Keyword.pop(opts, :name)
+
+    with {:ok, opts} <- connection_init(opts) do
+      state = init_state(name, opts)
       {:ok, state, {:continue, :connect}}
     end
   end
@@ -98,12 +91,25 @@ defmodule Rabbit.Connection.Server do
   # Private API
   ################################
 
-  defp connection_init(connection, opts) do
-    if Code.ensure_loaded?(connection) and function_exported?(connection, :init, 1) do
-      connection.init(opts)
+  defp connection_init(opts) do
+    {module, opts} = Keyword.pop(opts, :module)
+
+    if Code.ensure_loaded?(module) and function_exported?(module, :init, 1) do
+      module.init(opts)
     else
       {:ok, opts}
     end
+  end
+
+  defp init_state(name, opts) do
+    %{
+      pid: name || self(),
+      opts: Keyword.get(opts, :uri, opts),
+      connection: nil,
+      monitors: %{},
+      subscribers: MapSet.new(),
+      restart_attempts: 0
+    }
   end
 
   defp connect(%{connection: nil} = state) do
@@ -204,7 +210,7 @@ defmodule Rabbit.Connection.Server do
 
   defp log_error(state, error) do
     Logger.error("""
-    #{inspect(state.name)}: connection error.
+    [Rabbit.Connection] #{inspect(state.pid)}: connection error.
     Detail: #{inspect(error)}
     """)
   end

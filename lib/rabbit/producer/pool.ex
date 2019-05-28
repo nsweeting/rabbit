@@ -6,18 +6,18 @@ defmodule Rabbit.Producer.Pool do
   ################################
 
   @doc false
-  def child_spec(args) do
+  def child_spec(opts) do
     %{
       id: __MODULE__,
-      start: {__MODULE__, :start_link, args}
+      start: {__MODULE__, :start_link, opts}
     }
   end
 
   @doc false
-  def start_link(producer, connection, opts \\ []) do
-    {pool_opts, opts} = Keyword.split(opts, [:pool_size, :max_overflow])
-    opts = Keyword.merge(opts, producer: producer, connection: connection)
-    :poolboy.start_link(config(producer, pool_opts), opts)
+  def start_link(connection, opts \\ []) do
+    pool_opts = get_pool_opts(opts)
+    worker_opts = get_worker_opts(connection, opts)
+    :poolboy.start_link(pool_opts, worker_opts)
   end
 
   @doc false
@@ -32,12 +32,27 @@ defmodule Rabbit.Producer.Pool do
   # Private API
   ################################
 
-  defp config(name, opts) do
+  defp get_pool_opts(opts) do
     [
-      {:name, {:local, name}},
       {:worker_module, Rabbit.Producer.Server},
-      {:size, opts[:pool_size]},
-      {:max_overflow, opts[:max_overflow]}
+      {:size, Keyword.get(opts, :pool_size, 1)},
+      {:max_overflow, Keyword.get(opts, :max_overflow, 0)}
     ]
+    |> with_pool_name(opts)
+  end
+
+  defp with_pool_name(pool_opts, opts) do
+    name = Keyword.get(opts, :name)
+
+    if name do
+      pool_opts ++ [{:name, {:local, name}}]
+    else
+      pool_opts
+    end
+  end
+
+  defp get_worker_opts(connection, opts) do
+    opts = Keyword.take(opts, [:name, :serializers, :publish_opts])
+    Keyword.put(opts, :connection, connection)
   end
 end

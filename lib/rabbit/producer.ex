@@ -1,5 +1,7 @@
 defmodule Rabbit.Producer do
-  @type t :: module() | atom()
+  import Rabbit.Utilities
+
+  @type t :: GenServer.name()
   @type start_option ::
           {:connection, Rabbit.Connection.t()}
           | {:pool_size, non_neg_integer()}
@@ -34,6 +36,8 @@ defmodule Rabbit.Producer do
   @callback publish(exchange(), routing_key(), message(), publish_options(), timeout()) ::
               :ok | AMQP.Basic.error()
 
+  @optional_callbacks init: 1
+
   defmacro __using__(_) do
     quote do
       @behaviour Rabbit.Producer
@@ -41,30 +45,40 @@ defmodule Rabbit.Producer do
       def child_spec(args) do
         %{
           id: __MODULE__,
-          start: {__MODULE__, :start_link, args}
+          start: {__MODULE__, :start_link, args},
+          type: :supervisor
         }
       end
 
+      @impl Rabbit.Producer
       def start_link(connection, opts \\ []) do
-        Rabbit.Producer.start_link(__MODULE__, connection, opts)
+        opts = Keyword.merge(opts, name: __MODULE__, module: __MODULE__)
+        Rabbit.Producer.start_link(connection, opts)
       end
 
-      def init(opts) do
-        {:ok, opts}
-      end
-
+      @impl Rabbit.Producer
       def publish(exchange, routing_key, message, opts \\ [], timeout \\ 5_000) do
         Rabbit.Producer.publish(__MODULE__, exchange, routing_key, message, opts, timeout)
       end
-
-      defoverridable(init: 1)
     end
   end
 
-  @spec start_link(Rabbit.Producer.t(), Rabbit.Connection.t(), start_options()) ::
-          Supervisor.on_start()
-  def start_link(producer, connection, opts \\ []) do
-    Rabbit.Producer.Supervisor.start_link(producer, connection, opts)
+  ################################
+  # Public API
+  ################################
+
+  @doc false
+  def child_spec(args) do
+    %{
+      id: __MODULE__,
+      start: {__MODULE__, :start_link, args},
+      type: :supervisor
+    }
+  end
+
+  @spec start_link(Rabbit.Connection.t(), start_options()) :: Supervisor.on_start()
+  def start_link(connection, opts \\ []) do
+    Rabbit.Producer.Supervisor.start_link(connection, opts)
   end
 
   @spec publish(
@@ -76,8 +90,26 @@ defmodule Rabbit.Producer do
           timeout()
         ) :: :ok | {:error, any()}
   def publish(producer, exchange, routing_key, message, opts \\ [], timeout \\ 5_000) do
+    with {:ok, producer} <- get_producer(producer) do
+      args = [producer, exchange, routing_key, message, opts, timeout]
+      safe_call(Rabbit.Producer.Pool, :publish, args)
+    end
+  end
+
+  ################################
+  # Private API
+  ################################
+
+  defp get_producer(producer) when is_atom(producer) do
+    {:ok, producer}
+  end
+
+  defp get_producer(producer) do
     try do
-      Rabbit.Producer.Pool.publish(producer, exchange, routing_key, message, opts, timeout)
+      case Supervisor.which_children(producer) do
+        [{Rabbit.Producer.Pool, pid, _, _}] -> {:ok, pid}
+        _ -> {:error, :invalid_producer}
+      end
     catch
       msg, reason -> {:error, {msg, reason}}
     end

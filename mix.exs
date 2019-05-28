@@ -15,7 +15,7 @@ defmodule Rabbit.MixProject do
   def application do
     [
       extra_applications: [:lager, :logger],
-      mod: {Rabbit, []}
+      mod: {Rabbit.Application, []}
     ]
   end
 
@@ -24,7 +24,7 @@ defmodule Rabbit.MixProject do
     [
       {:amqp, "~> 1.1"},
       {:poolboy, "~> 1.5"},
-      {:keyword_validator, "~> 0.2"},
+      {:keyword_validator, "~> 0.3"},
       {:jason, "~> 1.1", optional: true},
       {:benchee, "~> 1.0", only: :dev},
       {:credo, "~> 1.0.0", only: [:dev, :test], runtime: false}

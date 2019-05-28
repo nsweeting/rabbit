@@ -1,8 +1,13 @@
 defmodule Rabbit.Connection do
-  @type t :: module() | atom()
+  import Rabbit.Utilities
+
+  @type t :: GenServer.name()
   @type uri :: String.t()
   @type option ::
-          {:username, String.t()}
+          {:module, module()}
+          | {:name, GenServer.name()}
+          | {:uri, String.t()}
+          | {:username, String.t()}
           | {:password, String.t()}
           | {:virtual_host, String.t()}
           | {:host, String.t()}
@@ -23,25 +28,23 @@ defmodule Rabbit.Connection do
 
   @callback unsubscribe(pid() | nil) :: :ok
 
+  @optional_callbacks init: 1
+
   defmacro __using__(_) do
     quote do
       @behaviour Rabbit.Connection
 
-      def child_spec(args) do
+      def child_spec(opts) do
         %{
           id: __MODULE__,
-          start: {__MODULE__, :start_link, args}
+          start: {__MODULE__, :start_link, opts}
         }
       end
 
       @impl Rabbit.Connection
       def start_link(opts \\ []) do
-        Rabbit.Connection.start_link(__MODULE__, opts)
-      end
-
-      @impl Rabbit.Connection
-      def init(opts) do
-        {:ok, opts}
+        opts = Keyword.merge(opts, name: __MODULE__, module: __MODULE__)
+        Rabbit.Connection.start_link(opts)
       end
 
       @impl Rabbit.Connection
@@ -53,8 +56,6 @@ defmodule Rabbit.Connection do
       def unsubscribe(subscriber \\ nil) do
         Rabbit.Connection.unsubscribe(__MODULE__, subscriber)
       end
-
-      defoverridable(init: 1)
     end
   end
 
@@ -63,31 +64,27 @@ defmodule Rabbit.Connection do
   ################################
 
   @doc false
-  def start_link(connection, opts \\ []) do
-    Rabbit.Connection.Server.start_link(connection, opts)
+  def child_spec(args) do
+    %{
+      id: __MODULE__,
+      start: {__MODULE__, :start_link, args}
+    }
+  end
+
+  @doc false
+  def start_link(opts \\ []) do
+    Rabbit.Connection.Server.start_link(opts)
   end
 
   @doc false
   def subscribe(connection, subscriber \\ nil) do
     subscriber = subscriber || self()
-    safe_call(:subscribe, [connection, subscriber])
+    safe_call(Rabbit.Connection.Server, :subscribe, [connection, subscriber])
   end
 
   @doc false
   def unsubscribe(connection, subscriber \\ nil) do
     subscriber = subscriber || self()
-    safe_call(:unsubscribe, [connection, subscriber])
-  end
-
-  ################################
-  # Private API
-  ################################
-
-  defp safe_call(function, args) do
-    try do
-      apply(Rabbit.Connection.Server, function, args)
-    catch
-      msg, reason -> {:error, {msg, reason}}
-    end
+    safe_call(Rabbit.Connection.Server, :unsubscribe, [connection, subscriber])
   end
 end

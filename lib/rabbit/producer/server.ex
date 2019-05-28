@@ -7,6 +7,13 @@ defmodule Rabbit.Producer.Server do
 
   alias Rabbit.Serializer
 
+  @opts %{
+    name: [type: [:atom, :tuple], required: false],
+    connection: [type: [:atom, :tuple, :pid], required: true],
+    serializers: [type: :map, default: Rabbit.Serializer.defaults()],
+    publish_opts: [type: :list, default: []]
+  }
+
   ################################
   # Public API
   ################################
@@ -28,6 +35,7 @@ defmodule Rabbit.Producer.Server do
   @doc false
   @impl GenServer
   def init(opts) do
+    opts = KeywordValidator.validate!(opts, @opts)
     state = init_state(opts)
     {:ok, state, {:continue, :connection}}
   end
@@ -89,12 +97,14 @@ defmodule Rabbit.Producer.Server do
   ################################
 
   defp init_state(opts) do
-    opts
-    |> Enum.into(%{})
-    |> Map.merge(%{
+    %{
+      name: Keyword.get(opts, :name, self()),
+      connection: Keyword.get(opts, :connection),
+      serializers: Keyword.get(opts, :serializers),
+      publish_opts: Keyword.get(opts, :publish_opts),
       channel: nil,
       restart_attempts: 0
-    })
+    }
   end
 
   defp connection(state) do
@@ -168,7 +178,7 @@ defmodule Rabbit.Producer.Server do
 
   defp log_error(state, error) do
     Logger.error("""
-    #{inspect(state.producer)}: producer error.
+    #{inspect(state.name)}: producer error.
     Detail: #{inspect(error)}
     """)
   end

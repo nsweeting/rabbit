@@ -27,3 +27,6 @@ rabbit-*.tar
 
 # Ignore asdf tool versions file
 .tool-versions
+
+# Ignore lager log files
+/log
