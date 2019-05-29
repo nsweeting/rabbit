@@ -11,7 +11,6 @@ defmodule Rabbit.Consumer.Server do
     name: [type: [:atom, :tuple], required: false],
     module: [custom: [{__MODULE__, :validate}], required: true],
     queue: [type: :binary, required: true],
-    serializers: [type: :map, default: Rabbit.Serializer.defaults()],
     prefetch_count: [type: :integer, default: 1],
     prefetch_size: [type: :integer, default: 0],
     consumer_tag: [type: :binary, default: ""],
@@ -36,7 +35,6 @@ defmodule Rabbit.Consumer.Server do
     :arguments
   ]
   @worker_opts [
-    :serializers,
     :timeout
   ]
 

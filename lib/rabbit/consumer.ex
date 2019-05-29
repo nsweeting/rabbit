@@ -4,7 +4,6 @@ defmodule Rabbit.Consumer do
   @type t :: GenServer.name()
   @type option ::
           {:queue, String.t()}
-          | {:serializers, %{optional(binary) => Rabbit.Serializer.t()}}
           | {:prefetch_count, non_neg_integer()}
           | {:prefetch_size, non_neg_integer()}
           | {:consumer_tag, String.t()}

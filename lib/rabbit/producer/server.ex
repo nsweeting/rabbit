@@ -13,7 +13,6 @@ defmodule Rabbit.Producer.Server do
     name: [type: [:atom, :tuple], required: false],
     module: [type: :module, required: false],
     connection: [type: [:atom, :tuple, :pid], required: true],
-    serializers: [type: :map, default: Rabbit.Serializer.defaults()],
     publish_opts: [type: :list, default: []]
   }
 
@@ -117,7 +116,6 @@ defmodule Rabbit.Producer.Server do
     %{
       name: name || self(),
       connection: Keyword.get(opts, :connection),
-      serializers: Keyword.get(opts, :serializers),
       publish_opts: Keyword.get(opts, :publish_opts),
       channel: nil,
       restart_attempts: 0
@@ -179,13 +177,14 @@ defmodule Rabbit.Producer.Server do
   defp perform_publish(state, exchange, routing_key, payload, opts) do
     opts = Keyword.merge(state.publish_opts, opts)
 
-    with {:ok, payload} <- encode_payload(state.serializers, payload, opts) do
+    with {:ok, payload} <- encode_payload(payload, opts) do
       AMQP.Basic.publish(state.channel, exchange, routing_key, payload, opts)
     end
   end
 
-  defp encode_payload(serializers, payload, opts) do
+  defp encode_payload(payload, opts) do
     with {:ok, content_type} when is_binary(content_type) <- Keyword.fetch(opts, :content_type),
+         {:ok, serializers} <- Rabbit.Config.get(:serializers),
          {:ok, serializer} when is_atom(serializer) <- Map.fetch(serializers, content_type) do
       Serializer.encode(serializer, payload)
     else

@@ -52,7 +52,7 @@ defmodule Rabbit.Producer.Pool do
   end
 
   defp get_worker_opts(connection, opts) do
-    opts = Keyword.take(opts, [:name, :module, :serializers, :publish_opts])
+    opts = Keyword.take(opts, [:name, :module, :publish_opts])
     Keyword.put(opts, :connection, connection)
   end
 end

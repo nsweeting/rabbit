@@ -6,8 +6,7 @@ defmodule Rabbit.Runner do
   require Logger
 
   @opts %{
-    timeout: [type: :integer, default: 30_000],
-    serializers: [type: :map, default: Rabbit.Serializer.defaults()]
+    timeout: [type: :integer, default: 30_000]
   }
 
   ################################
@@ -25,7 +24,6 @@ defmodule Rabbit.Runner do
 
   @spec start_link(Rabbit.Message.t(), keyword()) :: GenServer.on_start()
   def start_link(message, opts \\ []) do
-    opts = KeywordValidator.validate!(opts, @opts)
     GenServer.start_link(__MODULE__, {message, opts})
   end
 
@@ -36,6 +34,7 @@ defmodule Rabbit.Runner do
   @doc false
   @impl GenServer
   def init({message, opts}) do
+    opts = KeywordValidator.validate!(opts, @opts)
     state = init_state(message, opts)
     set_timeout(state.timeout)
     {:ok, state, {:continue, :execute}}
@@ -86,7 +85,7 @@ defmodule Rabbit.Runner do
     executer =
       spawn_link(fn ->
         try do
-          message = decode_payload!(state.serializers, state.message)
+          message = decode_payload!(state.message)
           consumer_callback(state, :handle_message, [message])
         rescue
           exception -> handle_error(state, exception, __STACKTRACE__)
@@ -98,14 +97,13 @@ defmodule Rabbit.Runner do
     %{state | executer: executer}
   end
 
-  defp decode_payload!(serializers, message) do
-    case Map.fetch(serializers, message.meta.content_type) do
-      {:ok, serializer} ->
-        payload = Rabbit.Serializer.decode!(serializer, message.payload)
-        %{message | decoded_payload: payload}
-
-      _ ->
-        message
+  defp decode_payload!(message) do
+    with {:ok, serializers} <- Rabbit.Config.get(:serializers),
+         {:ok, serializer} <- Map.fetch(serializers, message.meta.content_type) do
+      payload = Rabbit.Serializer.decode!(serializer, message.payload)
+      %{message | decoded_payload: payload}
+    else
+      _ -> message
     end
   end
 

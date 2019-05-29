@@ -6,7 +6,6 @@ defmodule Rabbit.Producer do
           {:connection, Rabbit.Connection.t()}
           | {:pool_size, non_neg_integer()}
           | {:max_overflow, non_neg_integer()}
-          | {:serializers, %{optional(binary) => Rabbit.Serializer.t()}}
   @type start_options :: [start_option()]
   @type exchange :: String.t()
   @type routing_key :: String.t()

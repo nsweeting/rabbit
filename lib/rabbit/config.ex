@@ -35,9 +35,7 @@ defmodule Rabbit.Config do
   end
 
   defp init_opts(opts) do
-    KeywordValidator.validate!(opts, %{
-      worker_count: [type: :integer, default: System.schedulers_online(), required: true]
-    })
+    KeywordValidator.validate!(opts, opts_schema())
   end
 
   defp init_table(opts) do
@@ -52,7 +50,8 @@ defmodule Rabbit.Config do
 
   defp opts_schema do
     %{
-      worker_count: [type: :integer, default: System.schedulers_online(), required: true]
+      worker_count: [type: :integer, default: System.schedulers_online(), required: true],
+      serializers: [type: :map, default: Rabbit.Serializer.defaults(), required: true]
     }
   end
 
