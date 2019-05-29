@@ -1,4 +1,4 @@
-defmodule Rabbit.Runner do
+defmodule Rabbit.Worker.Executer do
   @moduledoc false
 
   use GenServer

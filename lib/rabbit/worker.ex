@@ -22,10 +22,10 @@ defmodule Rabbit.Worker do
 
   @doc false
   def start_child(message, opts \\ []) do
-    worker_total = Rabbit.WorkerSupervisor.worker_total()
-    number = :erlang.phash2(message, worker_total)
-    child = {Rabbit.Runner, [message, opts]}
-    DynamicSupervisor.start_child(get_name(number), child)
+    worker_total = Rabbit.Worker.Supervisor.worker_total()
+    worker = message |> :erlang.phash2(worker_total) |> get_name()
+    child = {Rabbit.Worker.Executer, [message, opts]}
+    DynamicSupervisor.start_child(worker, child)
   end
 
   def get_name(number) do

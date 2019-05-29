@@ -1,4 +1,4 @@
-defmodule Rabbit.WorkerSupervisor do
+defmodule Rabbit.Worker.Supervisor do
   @moduledoc false
 
   use Supervisor

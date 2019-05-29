@@ -5,7 +5,7 @@ defmodule Rabbit.Application do
   def start(_type, _args) do
     children = [
       Rabbit.Config,
-      Rabbit.WorkerSupervisor
+      Rabbit.Worker.Supervisor
     ]
 
     opts = [strategy: :one_for_one, name: Rabbit.Supervisor]
