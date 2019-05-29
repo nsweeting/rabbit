@@ -31,6 +31,8 @@ defmodule Rabbit.Producer do
 
   @callback start_link(Rabbit.Connection.t(), start_options()) :: Supervisor.on_start()
 
+  @callback stop(timeout()) :: :ok | {:error, any()}
+
   @callback init(start_options()) :: {:ok, start_options()} | :ignore
 
   @callback publish(exchange(), routing_key(), message(), publish_options(), timeout()) ::
@@ -57,6 +59,11 @@ defmodule Rabbit.Producer do
       end
 
       @impl Rabbit.Producer
+      def stop(timeout \\ 5_000) do
+        Rabbit.Producer.stop(__MODULE__, timeout)
+      end
+
+      @impl Rabbit.Producer
       def publish(exchange, routing_key, message, opts \\ [], timeout \\ 5_000) do
         Rabbit.Producer.publish(__MODULE__, exchange, routing_key, message, opts, timeout)
       end
@@ -78,7 +85,7 @@ defmodule Rabbit.Producer do
 
   @spec start_link(Rabbit.Connection.t(), start_options()) :: Supervisor.on_start()
   def start_link(connection, opts \\ []) do
-    Rabbit.Producer.Supervisor.start_link(connection, opts)
+    Rabbit.Producer.Pool.start_link(connection, opts)
   end
 
   @spec publish(
@@ -90,28 +97,7 @@ defmodule Rabbit.Producer do
           timeout()
         ) :: :ok | {:error, any()}
   def publish(producer, exchange, routing_key, message, opts \\ [], timeout \\ 5_000) do
-    with {:ok, producer} <- get_producer(producer) do
-      args = [producer, exchange, routing_key, message, opts, timeout]
-      safe_call(Rabbit.Producer.Pool, :publish, args)
-    end
-  end
-
-  ################################
-  # Private API
-  ################################
-
-  defp get_producer(producer) when is_atom(producer) do
-    {:ok, producer}
-  end
-
-  defp get_producer(producer) do
-    try do
-      case Supervisor.which_children(producer) do
-        [{Rabbit.Producer.Pool, pid, _, _}] -> {:ok, pid}
-        _ -> {:error, :invalid_producer}
-      end
-    catch
-      msg, reason -> {:error, {msg, reason}}
-    end
+    args = [producer, exchange, routing_key, message, opts, timeout]
+    safe_call(Rabbit.Producer.Pool, :publish, args)
   end
 end

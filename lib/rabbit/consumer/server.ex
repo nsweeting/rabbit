@@ -9,7 +9,7 @@ defmodule Rabbit.Consumer.Server do
 
   @opts %{
     name: [type: [:atom, :tuple], required: false],
-    module: [type: :module, custom: [{__MODULE__, :validate}], required: true],
+    module: [custom: [{__MODULE__, :validate}], required: true],
     queue: [type: :binary, required: true],
     serializers: [type: :map, default: Rabbit.Serializer.defaults()],
     prefetch_count: [type: :integer, default: 1],
@@ -59,6 +59,11 @@ defmodule Rabbit.Consumer.Server do
   end
 
   @doc false
+  def stop(consumer, timeout \\ 5_000) do
+    GenServer.stop(consumer, :normal, timeout)
+  end
+
+  @doc false
   def ack(message, opts \\ []) do
     GenServer.cast(message.consumer, {:ack, message.meta.delivery_tag, opts})
   end
@@ -73,15 +78,9 @@ defmodule Rabbit.Consumer.Server do
     GenServer.cast(message.consumer, {:reject, message.meta.delivery_tag, opts})
   end
 
+  @doc false
   def validate(:module, module) do
-    if Code.ensure_loaded?(module) and
-         module.module_info[:attributes]
-         |> Keyword.get(:behaviour, [])
-         |> Enum.member?(Rabbit.Consumer) do
-      []
-    else
-      ["must be a module that adopts the Rabbit.Consumer behaviour"]
-    end
+    validate_consumer(module)
   end
 
   ################################
@@ -91,9 +90,8 @@ defmodule Rabbit.Consumer.Server do
   @doc false
   @impl GenServer
   def init({connection, opts}) do
-    opts = KeywordValidator.validate!(opts, @opts)
-
     with {:ok, opts} <- consumer_init(opts) do
+      opts = KeywordValidator.validate!(opts, @opts)
       state = init_state(connection, opts)
       {:ok, state, {:continue, :connection}}
     end
@@ -180,6 +178,11 @@ defmodule Rabbit.Consumer.Server do
     {:noreply, state}
   end
 
+  @impl GenServer
+  def terminate(_reason, state) do
+    disconnect(state)
+  end
+
   ################################
   # Private Helpers
   ################################
@@ -196,7 +199,7 @@ defmodule Rabbit.Consumer.Server do
 
   defp init_state(connection, opts) do
     %{
-      pid: Keyword.get(opts, :name, self()),
+      name: Keyword.get(opts, :name, self()),
       module: Keyword.get(opts, :module),
       connection: connection,
       channel: nil,
@@ -259,7 +262,7 @@ defmodule Rabbit.Consumer.Server do
     with :ok <- AMQP.Basic.qos(state.channel, state.qos_opts),
          {:ok, _} <- AMQP.Basic.consume(state.channel, state.queue, self(), state.consume_opts) do
       Logger.info("""
-      #{inspect(state.pid)}: consumer started.
+      [Rabbit.Consumer] #{inspect(state.name)}: consumer started.
       """)
 
       {:ok, state}
@@ -268,6 +271,15 @@ defmodule Rabbit.Consumer.Server do
         log_error(state, error)
         {:error, state}
     end
+  end
+
+  defp disconnect(%{channel: nil} = state) do
+    state
+  end
+
+  defp disconnect(%{channel: channel} = state) do
+    AMQP.Channel.close(channel)
+    state
   end
 
   defp restart_delay(state) do
@@ -295,8 +307,8 @@ defmodule Rabbit.Consumer.Server do
   end
 
   defp handle_message(state, payload, meta) do
-    message = Rabbit.Message.new(state.pid, state.module, state.channel, payload, meta)
-    Rabbit.WorkerSupervisor.start_child(message, state.worker_opts)
+    message = Rabbit.Message.new(state.name, state.module, state.channel, payload, meta)
+    Rabbit.Worker.start_child(message, state.worker_opts)
   end
 
   defp perform_ack(state, delivery_tag, opts) do
@@ -311,9 +323,20 @@ defmodule Rabbit.Consumer.Server do
     AMQP.Basic.reject(state.channel, delivery_tag, opts)
   end
 
+  defp validate_consumer(module) do
+    if Code.ensure_loaded?(module) and
+         module.module_info[:attributes]
+         |> Keyword.get(:behaviour, [])
+         |> Enum.member?(Rabbit.Consumer) do
+      []
+    else
+      ["must be a Rabbit.Consumer module"]
+    end
+  end
+
   defp log_error(state, error) do
     Logger.error("""
-    #{inspect(state.pid)}: consumer error.
+    [Rabbit.Consumer] #{inspect(state.name)}: consumer error.
     Detail: #{inspect(error)}
     """)
   end

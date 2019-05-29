@@ -1,38 +1,29 @@
 defmodule Rabbit.WorkerSupervisor do
   @moduledoc false
 
-  use DynamicSupervisor
+  use Supervisor
 
-  ################################
-  # Public API
-  ################################
-
-  @doc false
-  def child_spec(args) do
-    %{
-      id: __MODULE__,
-      start: {__MODULE__, :start_link, args}
-    }
+  def start_link(_) do
+    Supervisor.start_link(__MODULE__, :ok, name: __MODULE__)
   end
 
-  @doc false
-  def start_link do
-    DynamicSupervisor.start_link(__MODULE__, [], name: __MODULE__)
+  @impl true
+  def init(:ok) do
+    children = build_workers()
+
+    Supervisor.init(children, strategy: :one_for_one)
   end
 
-  @doc false
-  def start_child(message, opts \\ []) do
-    child = {Rabbit.Worker, [message, opts]}
-    DynamicSupervisor.start_child(__MODULE__, child)
+  def worker_total do
+    {:ok, worker_count} = Rabbit.Config.get(:worker_count)
+    worker_count - 1
   end
 
-  ################################
-  # DynamicSupervisor Callbacks
-  ################################
-
-  @doc false
-  @impl DynamicSupervisor
-  def init(_arg) do
-    DynamicSupervisor.init(strategy: :one_for_one)
+  defp build_workers do
+    Enum.reduce(0..worker_total(), [], fn number, children ->
+      name = Rabbit.Worker.get_name(number)
+      child = Supervisor.child_spec({Rabbit.Worker, [[name: name]]}, id: name)
+      children ++ [child]
+    end)
   end
 end

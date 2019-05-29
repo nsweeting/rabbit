@@ -3,6 +3,40 @@ defmodule Rabbit.Connection.Server do
 
   use GenServer
 
+  @opts %{
+    name: [type: [:atom, :tuple], required: false],
+    uri: [type: :binary, required: false],
+    username: [type: :binary, default: "guest", required: false],
+    password: [type: :binary, default: "guest", required: false],
+    virtual_host: [type: :binary, default: "/", required: false],
+    host: [type: :binary, default: "localhost", required: false],
+    port: [type: :integer, default: 5672, required: false],
+    channel_max: [type: :integer, default: 0, required: false],
+    frame_max: [type: :integer, default: 0, required: false],
+    heartbeat: [type: :integer, default: 10, required: false],
+    connection_timeout: [type: :integer, default: 50_000, required: false],
+    ssl_options: [type: [:binary, :atom], default: :none, required: false],
+    client_properties: [type: :list, default: [], required: false],
+    socket_options: [type: :list, default: [], required: false],
+    retry_backoff: [type: :integer, default: 1_000, required: true],
+    retry_max_delay: [type: :integer, default: 5_000, required: true]
+  }
+
+  @connect_opts [
+    :username,
+    :password,
+    :virtual_host,
+    :host,
+    :port,
+    :channel_max,
+    :frame_max,
+    :heartbeat,
+    :connection_timeout,
+    :ssl_options,
+    :client_properties,
+    :socket_options
+  ]
+
   require Logger
 
   ################################
@@ -13,6 +47,16 @@ defmodule Rabbit.Connection.Server do
   def start_link(opts \\ []) do
     server_opts = Keyword.take(opts, [:name])
     GenServer.start_link(__MODULE__, opts, server_opts)
+  end
+
+  @doc false
+  def stop(connection, timeout \\ 5_000) do
+    GenServer.stop(connection, :normal, timeout)
+  end
+
+  @doc false
+  def alive?(connection, timeout \\ 5_000) do
+    GenServer.call(connection, :alive?, timeout)
   end
 
   @doc false
@@ -34,10 +78,9 @@ defmodule Rabbit.Connection.Server do
   @doc false
   @impl GenServer
   def init(opts) do
-    {name, opts} = Keyword.pop(opts, :name)
-
     with {:ok, opts} <- connection_init(opts) do
-      state = init_state(name, opts)
+      opts = KeywordValidator.validate!(opts, @opts)
+      state = init_state(opts)
       {:ok, state, {:continue, :connect}}
     end
   end
@@ -47,20 +90,20 @@ defmodule Rabbit.Connection.Server do
   def handle_continue(:connect, state) do
     case connect(state) do
       {:ok, state} -> {:noreply, state}
-      {:error, state} -> {:noreply, state, {:continue, :restart_delay}}
+      {:error, state} -> {:noreply, state, {:continue, :retry_delay}}
     end
   end
 
   def handle_continue(:cleanup, %{connection: nil} = state) do
-    {:noreply, state, {:continue, :restart_delay}}
+    {:noreply, state, {:continue, :retry_delay}}
   end
 
   def handle_continue(:cleanup, state) do
     {:noreply, state}
   end
 
-  def handle_continue(:restart_delay, state) do
-    state = restart_delay(state)
+  def handle_continue(:retry_delay, state) do
+    state = retry_delay(state)
     {:noreply, state}
   end
 
@@ -71,12 +114,17 @@ defmodule Rabbit.Connection.Server do
     {:noreply, state, {:continue, :cleanup}}
   end
 
-  def handle_info(:restart, state) do
+  def handle_info(:reconnect, state) do
     {:noreply, state, {:continue, :connect}}
   end
 
   @doc false
   @impl GenServer
+  def handle_call(:alive?, _from, state) do
+    response = check_alive(state)
+    {:reply, response, state}
+  end
+
   def handle_call({:subscribe, subscriber}, _from, state) do
     state = perform_subscribe(state, subscriber)
     {:reply, :ok, state}
@@ -84,7 +132,12 @@ defmodule Rabbit.Connection.Server do
 
   def handle_call({:unsubscribe, subscriber}, _from, state) do
     state = cleanup(state, subscriber, :unsubscribe)
-    {:noreply, :ok, state}
+    {:reply, :ok, state}
+  end
+
+  @impl GenServer
+  def terminate(_reason, state) do
+    perform_disconnect(state)
   end
 
   ################################
@@ -101,19 +154,21 @@ defmodule Rabbit.Connection.Server do
     end
   end
 
-  defp init_state(name, opts) do
+  defp init_state(opts) do
     %{
-      pid: name || self(),
-      opts: Keyword.get(opts, :uri, opts),
+      name: Keyword.get(opts, :name, self()),
+      connection_opts: Keyword.get(opts, :uri) || Keyword.take(opts, @connect_opts),
       connection: nil,
       monitors: %{},
       subscribers: MapSet.new(),
-      restart_attempts: 0
+      retry_attempts: 0,
+      retry_backoff: Keyword.get(opts, :retry_backoff),
+      retry_max_delay: Keyword.get(opts, :retry_max_delay)
     }
   end
 
   defp connect(%{connection: nil} = state) do
-    case AMQP.Connection.open(state.opts) do
+    case AMQP.Connection.open(state.connection_opts) do
       {:ok, connection} ->
         state = %{state | connection: connection}
         state = monitor(state, connection.pid, :connection)
@@ -129,6 +184,16 @@ defmodule Rabbit.Connection.Server do
 
   defp connect(state) do
     {:ok, state}
+  end
+
+  defp perform_disconnect(%{connection: nil} = state) do
+    state
+  end
+
+  defp perform_disconnect(%{connection: connection} = state) do
+    :ok = AMQP.Connection.close(connection)
+    publish_disconnected(state, :stopped)
+    %{state | connection: nil}
   end
 
   defp monitor(state, pid, type) do
@@ -154,26 +219,27 @@ defmodule Rabbit.Connection.Server do
   defp connection_down(state, reason) do
     log_error(state, reason)
     publish_disconnected(state, reason)
-    %{state | restart_attempts: 0, connection: nil}
+    %{state | retry_attempts: 0, connection: nil}
   end
 
   defp subscriber_down(state, pid) do
     %{state | subscribers: MapSet.delete(state.subscribers, pid)}
   end
 
-  defp restart_delay(state) do
-    restart_attempts = state.restart_attempts + 1
-    delay = calculate_delay(restart_attempts)
-    Process.send_after(self(), :restart, delay)
-    %{state | restart_attempts: restart_attempts}
+  defp retry_delay(state) do
+    delay = calculate_reconnect_delay(state)
+    Process.send_after(self(), :reconnect, delay)
+    %{state | retry_attempts: state.retry_attempts + 1}
   end
 
-  defp calculate_delay(attempt) when attempt > 5 do
-    5_000
-  end
+  defp calculate_reconnect_delay(state) do
+    delay = state.retry_backoff * state.retry_attempts
 
-  defp calculate_delay(attempt) do
-    1000 * attempt
+    if delay > state.retry_max_delay do
+      state.retry_max_delay
+    else
+      delay
+    end
   end
 
   defp perform_subscribe(%{connection: nil} = state, subscriber) do
@@ -186,6 +252,14 @@ defmodule Rabbit.Connection.Server do
     state = %{state | subscribers: MapSet.put(state.subscribers, subscriber)}
     publish([subscriber], {:connected, state.connection})
     state
+  end
+
+  defp check_alive(%{connection: nil}) do
+    {:ok, false}
+  end
+
+  defp check_alive(_state) do
+    {:ok, true}
   end
 
   defp publish_connected(state_or_subscribers, connection) do
@@ -210,7 +284,7 @@ defmodule Rabbit.Connection.Server do
 
   defp log_error(state, error) do
     Logger.error("""
-    [Rabbit.Connection] #{inspect(state.pid)}: connection error.
+    [Rabbit.Connection] #{inspect(state.name)}: connection error.
     Detail: #{inspect(error)}
     """)
   end

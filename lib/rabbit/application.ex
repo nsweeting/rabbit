@@ -1,8 +1,10 @@
 defmodule Rabbit.Application do
   use Application
 
+  @impl Application
   def start(_type, _args) do
     children = [
+      Rabbit.Config,
       Rabbit.WorkerSupervisor
     ]
 

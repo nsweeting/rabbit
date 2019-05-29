@@ -21,6 +21,8 @@ defmodule Rabbit.Consumer do
 
   @callback start_link(Rabbit.Connection.t(), options()) :: Supervisor.on_start()
 
+  @callback stop(timeout()) :: :ok | {:error, any()}
+
   @callback init(options()) :: {:ok, options()} | :ignore
 
   @callback after_connect(AMQP.Channel.t(), queue :: String.t()) :: :ok | any()
@@ -47,6 +49,10 @@ defmodule Rabbit.Consumer do
         opts = Keyword.merge(opts, name: __MODULE__, module: __MODULE__)
         Rabbit.Consumer.start_link(connection, opts)
       end
+
+      def stop(timeout \\ 5_000) do
+        Rabbit.Consumer.stop(__MODULE__, timeout)
+      end
     end
   end
 
@@ -65,6 +71,11 @@ defmodule Rabbit.Consumer do
   @spec start_link(Rabbit.Connection.t(), options()) :: Supervisor.on_start()
   def start_link(connection, opts \\ []) do
     Rabbit.Consumer.Server.start_link(connection, opts)
+  end
+
+  @spec stop(Rabbit.Consumer.t(), timeout()) :: :ok | {:error, any()}
+  def stop(consumer, timeout \\ 5_000) do
+    safe_call(Rabbit.Consumer.Server, :stop, [consumer, timeout])
   end
 
   @spec ack(Rabbit.Message.t(), action_options()) :: :ok | {:error, any()}

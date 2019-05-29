@@ -22,6 +22,8 @@ defmodule Rabbit.Connection do
 
   @callback start_link(options()) :: GenServer.on_start()
 
+  @callback stop(timeout()) :: :ok | {:error, any()}
+
   @callback init(options()) :: {:ok, options()} | :ignore
 
   @callback subscribe(pid() | nil) :: :ok
@@ -45,6 +47,11 @@ defmodule Rabbit.Connection do
       def start_link(opts \\ []) do
         opts = Keyword.merge(opts, name: __MODULE__, module: __MODULE__)
         Rabbit.Connection.start_link(opts)
+      end
+
+      @impl Rabbit.Connection
+      def stop(timeout \\ 5_000) do
+        Rabbit.Connection.stop(__MODULE__, timeout)
       end
 
       @impl Rabbit.Connection
@@ -74,6 +81,16 @@ defmodule Rabbit.Connection do
   @doc false
   def start_link(opts \\ []) do
     Rabbit.Connection.Server.start_link(opts)
+  end
+
+  @doc false
+  def stop(connection, timeout \\ 5_000) do
+    safe_call(Rabbit.Connection.Server, :stop, [connection, timeout])
+  end
+
+  @spec alive?(Rabbit.Connection.t(), timeout()) :: {:ok, boolean()} | {:error, any()}
+  def alive?(connection, timeout \\ 5_000) do
+    safe_call(Rabbit.Connection.Server, :alive?, [connection, timeout])
   end
 
   @doc false

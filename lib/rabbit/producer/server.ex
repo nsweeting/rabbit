@@ -5,10 +5,13 @@ defmodule Rabbit.Producer.Server do
 
   require Logger
 
+  import Rabbit.Utilities
+
   alias Rabbit.Serializer
 
   @opts %{
     name: [type: [:atom, :tuple], required: false],
+    module: [type: :module, required: false],
     connection: [type: [:atom, :tuple, :pid], required: true],
     serializers: [type: :map, default: Rabbit.Serializer.defaults()],
     publish_opts: [type: :list, default: []]
@@ -35,9 +38,13 @@ defmodule Rabbit.Producer.Server do
   @doc false
   @impl GenServer
   def init(opts) do
-    opts = KeywordValidator.validate!(opts, @opts)
-    state = init_state(opts)
-    {:ok, state, {:continue, :connection}}
+    {name, opts} = Keyword.pop(opts, :name)
+
+    with {:ok, opts} <- producer_init(opts) do
+      opts = KeywordValidator.validate!(opts, @opts)
+      state = init_state(name, opts)
+      {:ok, state, {:continue, :connection}}
+    end
   end
 
   @doc false
@@ -96,9 +103,19 @@ defmodule Rabbit.Producer.Server do
   # Private API
   ################################
 
-  defp init_state(opts) do
+  defp producer_init(opts) do
+    {module, opts} = Keyword.pop(opts, :module)
+
+    if callback_exported?(module, :init, 1) do
+      module.init(opts)
+    else
+      {:ok, opts}
+    end
+  end
+
+  defp init_state(name, opts) do
     %{
-      name: Keyword.get(opts, :name, self()),
+      name: name || self(),
       connection: Keyword.get(opts, :connection),
       serializers: Keyword.get(opts, :serializers),
       publish_opts: Keyword.get(opts, :publish_opts),
