@@ -28,7 +28,7 @@ defmodule Rabbit.Producer do
 
   @callback start_link(Rabbit.Connection.t(), start_options()) :: Supervisor.on_start()
 
-  @callback stop(timeout()) :: :ok | {:error, any()}
+  @callback stop() :: :ok
 
   @callback init(start_options()) :: {:ok, start_options()} | :ignore
 
@@ -99,11 +99,12 @@ defmodule Rabbit.Producer do
           timeout()
         ) :: :ok | {:error, any()}
   def publish(producer, exchange, routing_key, payload, opts \\ [], timeout \\ 5_000) do
-    :poolboy.transaction(producer, &do_publish(&1, exchange, routing_key, payload, opts, timeout))
+    message = {exchange, routing_key, payload, opts}
+    :poolboy.transaction(producer, &do_publish(&1, message, timeout))
   end
 
   @doc false
-  defp do_publish(producer, exchange, routing_key, payload, opts, timeout) do
-    GenServer.call(producer, {:publish, exchange, routing_key, payload, opts}, timeout)
+  defp do_publish(producer, message, timeout) do
+    GenServer.call(producer, {:publish, message}, timeout)
   end
 end
