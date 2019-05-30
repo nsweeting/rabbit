@@ -87,7 +87,7 @@ defmodule Rabbit.Producer do
 
   @spec stop(Rabbit.Producer.t()) :: :ok
   def stop(producer) do
-    Rabbit.Producer.Pool.stop(producer)
+    GenServer.stop(producer)
   end
 
   @spec publish(
@@ -98,7 +98,12 @@ defmodule Rabbit.Producer do
           publish_options(),
           timeout()
         ) :: :ok | {:error, any()}
-  def publish(producer, exchange, routing_key, message, opts \\ [], timeout \\ 5_000) do
-    Rabbit.Producer.Pool.publish(producer, exchange, routing_key, message, opts, timeout)
+  def publish(producer, exchange, routing_key, payload, opts \\ [], timeout \\ 5_000) do
+    :poolboy.transaction(producer, &do_publish(&1, exchange, routing_key, payload, opts, timeout))
+  end
+
+  @doc false
+  defp do_publish(producer, exchange, routing_key, payload, opts, timeout) do
+    GenServer.call(producer, {:publish, exchange, routing_key, payload, opts}, timeout)
   end
 end

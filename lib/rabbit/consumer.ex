@@ -71,23 +71,23 @@ defmodule Rabbit.Consumer do
     Rabbit.Consumer.Server.start_link(connection, opts)
   end
 
-  @spec stop(Rabbit.Consumer.t()) :: :ok
+  @doc false
   def stop(consumer) do
-    Rabbit.Consumer.Server.stop(consumer)
+    GenServer.stop(consumer, :normal)
   end
 
-  @spec ack(Rabbit.Consumer.t(), delivery_tag(), action_options()) :: :ok
+  @doc false
   def ack(consumer, delivery_tag, opts \\ []) do
-    Rabbit.Consumer.Server.ack(consumer, delivery_tag, opts)
+    GenServer.cast(consumer, {:ack, delivery_tag, opts})
   end
 
-  @spec nack(Rabbit.Consumer.t(), delivery_tag(), action_options()) :: :ok
+  @doc false
   def nack(consumer, delivery_tag, opts \\ []) do
-    Rabbit.Consumer.Server.nack(consumer, delivery_tag, opts)
+    GenServer.cast(consumer, {:nack, delivery_tag, opts})
   end
 
-  @spec reject(Rabbit.Consumer.t(), delivery_tag(), action_options()) :: :ok
+  @doc false
   def reject(consumer, delivery_tag, opts \\ []) do
-    Rabbit.Consumer.Server.reject(consumer, delivery_tag, opts)
+    GenServer.cast(consumer, {:reject, delivery_tag, opts})
   end
 end

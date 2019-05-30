@@ -20,19 +20,6 @@ defmodule Rabbit.Producer.Pool do
     :poolboy.start_link(pool_opts, worker_opts)
   end
 
-  @doc false
-  def stop(producer) do
-    GenServer.stop(producer)
-  end
-
-  @doc false
-  def publish(producer, exchange, routing_key, payload, opts \\ [], timeout \\ 5_000) do
-    :poolboy.transaction(
-      producer,
-      &Rabbit.Producer.Server.publish(&1, exchange, routing_key, payload, opts, timeout)
-    )
-  end
-
   ################################
   # Private API
   ################################

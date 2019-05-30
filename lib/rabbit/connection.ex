@@ -84,29 +84,34 @@ defmodule Rabbit.Connection do
   end
 
   @doc false
+  @spec start_link(options()) :: GenServer.on_start()
   def start_link(opts \\ []) do
     Rabbit.Connection.Server.start_link(opts)
   end
 
   @doc false
+  @spec stop(Rabbit.Connection.t()) :: :ok
   def stop(connection) do
-    Rabbit.Connection.Server.stop(connection)
-  end
-
-  @spec alive?(Rabbit.Connection.t(), timeout()) :: boolean()
-  def alive?(connection, timeout \\ 5_000) do
-    Rabbit.Connection.Server.alive?(connection, timeout)
+    GenServer.stop(connection, :normal)
   end
 
   @doc false
+  @spec alive?(Rabbit.Connection.t()) :: :ok
+  def alive?(connection) do
+    GenServer.call(connection, :alive?)
+  end
+
+  @doc false
+  @spec subscribe(Rabbit.Connection.t(), pid() | nil) :: :ok
   def subscribe(connection, subscriber \\ nil) do
     subscriber = subscriber || self()
-    Rabbit.Connection.Server.subscribe(connection, subscriber)
+    GenServer.call(connection, {:subscribe, subscriber})
   end
 
   @doc false
+  @spec unsubscribe(Rabbit.Connection.t(), pid() | nil) :: :ok
   def unsubscribe(connection, subscriber \\ nil) do
     subscriber = subscriber || self()
-    Rabbit.Connection.Server.unsubscribe(connection, subscriber)
+    GenServer.call(connection, {:unsubscribe, subscriber})
   end
 end
