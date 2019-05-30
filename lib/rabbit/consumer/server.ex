@@ -57,23 +57,23 @@ defmodule Rabbit.Consumer.Server do
   end
 
   @doc false
-  def stop(consumer, timeout \\ 5_000) do
-    GenServer.stop(consumer, :normal, timeout)
+  def stop(consumer) do
+    GenServer.stop(consumer, :normal)
   end
 
   @doc false
-  def ack(message, opts \\ []) do
-    GenServer.cast(message.consumer, {:ack, message.meta.delivery_tag, opts})
+  def ack(consumer, delivery_tag, opts \\ []) do
+    GenServer.cast(consumer, {:ack, delivery_tag, opts})
   end
 
   @doc false
-  def nack(message, opts \\ []) do
-    GenServer.cast(message.consumer, {:nack, message.meta.delivery_tag, opts})
+  def nack(consumer, delivery_tag, opts \\ []) do
+    GenServer.cast(consumer, {:nack, delivery_tag, opts})
   end
 
   @doc false
-  def reject(message, opts \\ []) do
-    GenServer.cast(message.consumer, {:reject, message.meta.delivery_tag, opts})
+  def reject(consumer, delivery_tag, opts \\ []) do
+    GenServer.cast(consumer, {:reject, delivery_tag, opts})
   end
 
   @doc false
@@ -154,6 +154,11 @@ defmodule Rabbit.Consumer.Server do
     {:noreply, state}
   end
 
+  def handle_info({:basic_cancel, _}, state) do
+    log_error(state, :basic_cancel)
+    {:noreply, state, {:continue, :after_connect}}
+  end
+
   def handle_info({:DOWN, _ref, :process, _pid, reason}, state) do
     state = channel_down(state, reason)
     {:noreply, state, {:continue, :restart_delay}}
@@ -162,17 +167,17 @@ defmodule Rabbit.Consumer.Server do
   @doc false
   @impl GenServer
   def handle_cast({:ack, delivery_tag, opts}, state) do
-    perform_ack(state, delivery_tag, opts)
+    AMQP.Basic.ack(state.channel, delivery_tag, opts)
     {:noreply, state}
   end
 
   def handle_cast({:nack, delivery_tag, opts}, state) do
-    perform_nack(state, delivery_tag, opts)
+    AMQP.Basic.nack(state.channel, delivery_tag, opts)
     {:noreply, state}
   end
 
   def handle_cast({:reject, delivery_tag, opts}, state) do
-    perform_reject(state, delivery_tag, opts)
+    AMQP.Basic.reject(state.channel, delivery_tag, opts)
     {:noreply, state}
   end
 
@@ -276,8 +281,8 @@ defmodule Rabbit.Consumer.Server do
   end
 
   defp disconnect(%{channel: channel} = state) do
-    AMQP.Channel.close(channel)
-    state
+    if Process.alive?(channel.pid), do: AMQP.Channel.close(channel)
+    %{state | channel: nil}
   end
 
   defp restart_delay(state) do
@@ -307,18 +312,6 @@ defmodule Rabbit.Consumer.Server do
   defp handle_message(state, payload, meta) do
     message = Rabbit.Message.new(state.name, state.module, state.channel, payload, meta)
     Rabbit.Worker.start_child(message, state.worker_opts)
-  end
-
-  defp perform_ack(state, delivery_tag, opts) do
-    AMQP.Basic.ack(state.channel, delivery_tag, opts)
-  end
-
-  defp perform_nack(state, delivery_tag, opts) do
-    AMQP.Basic.nack(state.channel, delivery_tag, opts)
-  end
-
-  defp perform_reject(state, delivery_tag, opts) do
-    AMQP.Basic.reject(state.channel, delivery_tag, opts)
   end
 
   defp validate_consumer(module) do

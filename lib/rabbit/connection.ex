@@ -1,6 +1,4 @@
 defmodule Rabbit.Connection do
-  import Rabbit.Utilities
-
   @type t :: GenServer.name()
   @type uri :: String.t()
   @type option ::
@@ -26,6 +24,8 @@ defmodule Rabbit.Connection do
 
   @callback init(options()) :: {:ok, options()} | :ignore
 
+  @callback alive?() :: boolean()
+
   @callback subscribe(pid() | nil) :: :ok
 
   @callback unsubscribe(pid() | nil) :: :ok
@@ -50,13 +50,18 @@ defmodule Rabbit.Connection do
       end
 
       @impl Rabbit.Connection
-      def stop(timeout \\ 5_000) do
-        Rabbit.Connection.stop(__MODULE__, timeout)
+      def stop do
+        Rabbit.Connection.stop(__MODULE__)
       end
 
       @impl Rabbit.Connection
       def subscribe(subscriber \\ nil) do
         Rabbit.Connection.subscribe(__MODULE__, subscriber)
+      end
+
+      @impl Rabbit.Connection
+      def alive? do
+        Rabbit.Connection.alive?(__MODULE__)
       end
 
       @impl Rabbit.Connection
@@ -84,24 +89,24 @@ defmodule Rabbit.Connection do
   end
 
   @doc false
-  def stop(connection, timeout \\ 5_000) do
-    safe_call(Rabbit.Connection.Server, :stop, [connection, timeout])
+  def stop(connection) do
+    Rabbit.Connection.Server.stop(connection)
   end
 
-  @spec alive?(Rabbit.Connection.t(), timeout()) :: {:ok, boolean()} | {:error, any()}
+  @spec alive?(Rabbit.Connection.t(), timeout()) :: boolean()
   def alive?(connection, timeout \\ 5_000) do
-    safe_call(Rabbit.Connection.Server, :alive?, [connection, timeout])
+    Rabbit.Connection.Server.alive?(connection, timeout)
   end
 
   @doc false
   def subscribe(connection, subscriber \\ nil) do
     subscriber = subscriber || self()
-    safe_call(Rabbit.Connection.Server, :subscribe, [connection, subscriber])
+    Rabbit.Connection.Server.subscribe(connection, subscriber)
   end
 
   @doc false
   def unsubscribe(connection, subscriber \\ nil) do
     subscriber = subscriber || self()
-    safe_call(Rabbit.Connection.Server, :unsubscribe, [connection, subscriber])
+    Rabbit.Connection.Server.unsubscribe(connection, subscriber)
   end
 end

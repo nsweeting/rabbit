@@ -3,10 +3,16 @@ defmodule Rabbit.Config do
 
   @table __MODULE__
 
+  ################################
+  # Public API
+  ################################
+
+  @spec start_link(Keyword.t()) :: GenServer.on_start()
   def start_link(opts) do
     GenServer.start_link(__MODULE__, opts, name: __MODULE__)
   end
 
+  @spec get(atom()) :: :error | {:ok, any}
   def get(key) do
     case :ets.lookup(@table, key) do
       [{_, val} | _] ->
@@ -17,10 +23,17 @@ defmodule Rabbit.Config do
     end
   end
 
+  @spec put(atom(), any()) :: :ok
   def put(key, val) do
     GenServer.call(__MODULE__, {:put, key, val})
   end
 
+  ################################
+  # GenServer Callbacks
+  ################################
+
+  @doc false
+  @impl GenServer
   def init(opts) do
     opts
     |> init_opts()
@@ -29,10 +42,16 @@ defmodule Rabbit.Config do
     {:ok, :ok}
   end
 
+  @doc false
+  @impl GenServer
   def handle_call({:put, key, val}, _from, state) do
     result = do_put(key, val)
     {:reply, result, state}
   end
+
+  ################################
+  # Private API
+  ################################
 
   defp init_opts(opts) do
     KeywordValidator.validate!(opts, opts_schema())
@@ -50,7 +69,7 @@ defmodule Rabbit.Config do
 
   defp opts_schema do
     %{
-      worker_count: [type: :integer, default: System.schedulers_online(), required: true],
+      worker_pool_size: [type: :integer, default: System.schedulers_online(), required: true],
       serializers: [type: :map, default: Rabbit.Serializer.defaults(), required: true]
     }
   end

@@ -11,7 +11,11 @@ if Code.ensure_loaded?(Jason) do
     @doc false
     @impl Rabbit.Serializer
     def decode(data) do
-      Jason.decode(data)
+      try do
+        Jason.decode(data)
+      rescue
+        exception -> {:error, exception}
+      end
     end
   end
 end

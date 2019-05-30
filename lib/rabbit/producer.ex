@@ -1,6 +1,4 @@
 defmodule Rabbit.Producer do
-  import Rabbit.Utilities
-
   @type t :: GenServer.name()
   @type start_option ::
           {:connection, Rabbit.Connection.t()}
@@ -58,8 +56,8 @@ defmodule Rabbit.Producer do
       end
 
       @impl Rabbit.Producer
-      def stop(timeout \\ 5_000) do
-        Rabbit.Producer.stop(__MODULE__, timeout)
+      def stop do
+        Rabbit.Producer.stop(__MODULE__)
       end
 
       @impl Rabbit.Producer
@@ -87,6 +85,11 @@ defmodule Rabbit.Producer do
     Rabbit.Producer.Pool.start_link(connection, opts)
   end
 
+  @spec stop(Rabbit.Producer.t()) :: :ok
+  def stop(producer) do
+    Rabbit.Producer.Pool.stop(producer)
+  end
+
   @spec publish(
           Rabbit.Producer.t(),
           exchange(),
@@ -96,7 +99,6 @@ defmodule Rabbit.Producer do
           timeout()
         ) :: :ok | {:error, any()}
   def publish(producer, exchange, routing_key, message, opts \\ [], timeout \\ 5_000) do
-    args = [producer, exchange, routing_key, message, opts, timeout]
-    safe_call(Rabbit.Producer.Pool, :publish, args)
+    Rabbit.Producer.Pool.publish(producer, exchange, routing_key, message, opts, timeout)
   end
 end

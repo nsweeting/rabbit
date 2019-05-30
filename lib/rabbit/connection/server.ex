@@ -50,8 +50,8 @@ defmodule Rabbit.Connection.Server do
   end
 
   @doc false
-  def stop(connection, timeout \\ 5_000) do
-    GenServer.stop(connection, :normal, timeout)
+  def stop(connection) do
+    GenServer.stop(connection, :normal)
   end
 
   @doc false
@@ -121,7 +121,7 @@ defmodule Rabbit.Connection.Server do
   @doc false
   @impl GenServer
   def handle_call(:alive?, _from, state) do
-    response = check_alive(state)
+    response = not is_nil(state.connection)
     {:reply, response, state}
   end
 
@@ -137,7 +137,7 @@ defmodule Rabbit.Connection.Server do
 
   @impl GenServer
   def terminate(_reason, state) do
-    perform_disconnect(state)
+    disconnect(state)
   end
 
   ################################
@@ -186,12 +186,12 @@ defmodule Rabbit.Connection.Server do
     {:ok, state}
   end
 
-  defp perform_disconnect(%{connection: nil} = state) do
+  defp disconnect(%{connection: nil} = state) do
     state
   end
 
-  defp perform_disconnect(%{connection: connection} = state) do
-    :ok = AMQP.Connection.close(connection)
+  defp disconnect(%{connection: connection} = state) do
+    if Process.alive?(connection.pid), do: AMQP.Connection.close(connection)
     publish_disconnected(state, :stopped)
     %{state | connection: nil}
   end
@@ -252,14 +252,6 @@ defmodule Rabbit.Connection.Server do
     state = %{state | subscribers: MapSet.put(state.subscribers, subscriber)}
     publish([subscriber], {:connected, state.connection})
     state
-  end
-
-  defp check_alive(%{connection: nil}) do
-    {:ok, false}
-  end
-
-  defp check_alive(_state) do
-    {:ok, true}
   end
 
   defp publish_connected(state_or_subscribers, connection) do

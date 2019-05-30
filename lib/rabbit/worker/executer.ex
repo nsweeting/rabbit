@@ -6,7 +6,7 @@ defmodule Rabbit.Worker.Executer do
   require Logger
 
   @opts %{
-    timeout: [type: :integer, default: 30_000]
+    timeout: [type: :integer, default: 0]
   }
 
   ################################
@@ -50,11 +50,14 @@ defmodule Rabbit.Worker.Executer do
   @doc false
   @impl GenServer
   def handle_info(:timeout, state) do
-    if is_pid(state.executer), do: Process.exit(state.executer, :timeout)
-    {:noreply, state}
+    if is_pid(state.executer), do: Process.exit(state.executer, :normal)
+    handle_error(state, {:exit, :timeout}, [])
+    {:stop, :timeout, state}
   end
 
-  def handle_info({:EXIT, _, _}, state) do
+  @doc false
+  @impl GenServer
+  def handle_cast({:complete, ref1}, %{executer_ref: ref2} = state) when ref1 == ref2 do
     {:stop, :normal, state}
   end
 
@@ -67,6 +70,7 @@ defmodule Rabbit.Worker.Executer do
     |> Enum.into(%{})
     |> Map.merge(%{
       executer: nil,
+      executer_ref: nil,
       message: message
     })
   end
@@ -80,7 +84,8 @@ defmodule Rabbit.Worker.Executer do
   end
 
   defp execute(state) do
-    Process.flag(:trap_exit, true)
+    parent = self()
+    ref = make_ref()
 
     executer =
       spawn_link(fn ->
@@ -92,9 +97,11 @@ defmodule Rabbit.Worker.Executer do
         catch
           msg, reason -> handle_error(state, {msg, reason}, __STACKTRACE__)
         end
+
+        GenServer.cast(parent, {:complete, ref})
       end)
 
-    %{state | executer: executer}
+    %{state | executer: executer, executer_ref: ref}
   end
 
   defp decode_payload!(message) do
@@ -111,12 +118,16 @@ defmodule Rabbit.Worker.Executer do
     apply(state.message.module, fun, args) |> handle_result()
   end
 
-  defp handle_result({:ack, message}), do: Rabbit.Consumer.ack(message)
-  defp handle_result({:ack, message, opts}), do: Rabbit.Consumer.ack(message, opts)
-  defp handle_result({:nack, message}), do: Rabbit.Consumer.nack(message)
-  defp handle_result({:nack, message, opts}), do: Rabbit.Consumer.nack(message, opts)
-  defp handle_result({:reject, message}), do: Rabbit.Consumer.reject(message)
-  defp handle_result({:reject, message, opts}), do: Rabbit.Consumer.reject(message, opts)
+  defp consumer_action(message, action, opts) do
+    apply(Rabbit.Consumer, action, [message.consumer, message.meta.delivery_tag, opts])
+  end
+
+  defp handle_result({:ack, message}), do: consumer_action(message, :ack, [])
+  defp handle_result({:ack, message, opts}), do: consumer_action(message, :ack, opts)
+  defp handle_result({:nack, message}), do: consumer_action(message, :nack, [])
+  defp handle_result({:nack, message, opts}), do: consumer_action(message, :nack, opts)
+  defp handle_result({:reject, message}), do: consumer_action(message, :reject, [])
+  defp handle_result({:reject, message, opts}), do: consumer_action(message, :reject, opts)
   defp handle_result(other), do: other
 
   defp handle_error(state, reason, stack) do
@@ -127,7 +138,7 @@ defmodule Rabbit.Worker.Executer do
 
   defp log_error(message) do
     Logger.error("""
-    #{inspect(message.consumer)}: worker error.
+    [Rabbit.Worker] #{inspect(message.consumer)}: executer error.
 
     Reason:
         #{log_inspect(message.error_reason)}
@@ -137,10 +148,9 @@ defmodule Rabbit.Worker.Executer do
 
     Consumer:
         - Module: #{inspect(message.module)}
-        - Worker: #{inspect(self())}
+        - Executer: #{inspect(self())}
         - Exchange: #{message.meta.exchange}
         - Routing key: #{message.meta.routing_key}
-
     #{log_error_stack(message.error_stack)}
     """)
   end

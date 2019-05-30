@@ -98,6 +98,11 @@ defmodule Rabbit.Producer.Server do
     {:noreply, state, {:continue, :restart_delay}}
   end
 
+  @impl GenServer
+  def terminate(_reason, state) do
+    disconnect(state)
+  end
+
   ################################
   # Private API
   ################################
@@ -150,6 +155,15 @@ defmodule Rabbit.Producer.Server do
     {:ok, state}
   end
 
+  defp disconnect(%{channel: nil} = state) do
+    state
+  end
+
+  defp disconnect(%{channel: channel} = state) do
+    if Process.alive?(channel.pid), do: AMQP.Channel.close(channel)
+    %{state | channel: nil}
+  end
+
   defp restart_delay(state) do
     restart_attempts = state.restart_attempts + 1
     delay = calculate_delay(restart_attempts)
@@ -194,7 +208,7 @@ defmodule Rabbit.Producer.Server do
 
   defp log_error(state, error) do
     Logger.error("""
-    #{inspect(state.name)}: producer error.
+    [Rabbit.Producer] #{inspect(state.name)}: producer error.
     Detail: #{inspect(error)}
     """)
   end

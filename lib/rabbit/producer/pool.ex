@@ -21,6 +21,11 @@ defmodule Rabbit.Producer.Pool do
   end
 
   @doc false
+  def stop(producer) do
+    GenServer.stop(producer)
+  end
+
+  @doc false
   def publish(producer, exchange, routing_key, payload, opts \\ [], timeout \\ 5_000) do
     :poolboy.transaction(
       producer,

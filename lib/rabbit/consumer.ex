@@ -1,6 +1,4 @@
 defmodule Rabbit.Consumer do
-  import Rabbit.Utilities
-
   @type t :: GenServer.name()
   @type option ::
           {:queue, String.t()}
@@ -13,6 +11,7 @@ defmodule Rabbit.Consumer do
           | {:no_wait, boolean()}
           | {:arguments, Keyword.t()}
   @type options :: [option()]
+  @type delivery_tag :: non_neg_integer()
   @type action :: :ack | :nack | :reject
   @type action_options :: [{:multiple, boolean()} | {:requeue, boolean()}]
   @type result ::
@@ -30,7 +29,7 @@ defmodule Rabbit.Consumer do
 
   @callback handle_error(Rabbit.Message.t()) :: result() | any()
 
-  @optional_callbacks start_link: 2, init: 1, after_connect: 2
+  @optional_callbacks init: 1, after_connect: 2
 
   defmacro __using__(_) do
     quote do
@@ -49,8 +48,8 @@ defmodule Rabbit.Consumer do
         Rabbit.Consumer.start_link(connection, opts)
       end
 
-      def stop(timeout \\ 5_000) do
-        Rabbit.Consumer.stop(__MODULE__, timeout)
+      def stop do
+        Rabbit.Consumer.stop(__MODULE__)
       end
     end
   end
@@ -72,23 +71,23 @@ defmodule Rabbit.Consumer do
     Rabbit.Consumer.Server.start_link(connection, opts)
   end
 
-  @spec stop(Rabbit.Consumer.t(), timeout()) :: :ok | {:error, any()}
-  def stop(consumer, timeout \\ 5_000) do
-    safe_call(Rabbit.Consumer.Server, :stop, [consumer, timeout])
+  @spec stop(Rabbit.Consumer.t()) :: :ok
+  def stop(consumer) do
+    Rabbit.Consumer.Server.stop(consumer)
   end
 
-  @spec ack(Rabbit.Message.t(), action_options()) :: :ok | {:error, any()}
-  def ack(message, opts \\ []) do
-    safe_call(Rabbit.Consumer.Server, :ack, [message, opts])
+  @spec ack(Rabbit.Consumer.t(), delivery_tag(), action_options()) :: :ok
+  def ack(consumer, delivery_tag, opts \\ []) do
+    Rabbit.Consumer.Server.ack(consumer, delivery_tag, opts)
   end
 
-  @spec nack(Rabbit.Message.t(), action_options()) :: :ok | {:error, any()}
-  def nack(message, opts \\ []) do
-    safe_call(Rabbit.Consumer.Server, :nack, [message, opts])
+  @spec nack(Rabbit.Consumer.t(), delivery_tag(), action_options()) :: :ok
+  def nack(consumer, delivery_tag, opts \\ []) do
+    Rabbit.Consumer.Server.nack(consumer, delivery_tag, opts)
   end
 
-  @spec reject(Rabbit.Message.t(), action_options()) :: :ok | {:error, any()}
-  def reject(message, opts \\ []) do
-    safe_call(Rabbit.Consumer.Server, :reject, [message, opts])
+  @spec reject(Rabbit.Consumer.t(), delivery_tag(), action_options()) :: :ok
+  def reject(consumer, delivery_tag, opts \\ []) do
+    Rabbit.Consumer.Server.reject(consumer, delivery_tag, opts)
   end
 end

@@ -1,6 +1,6 @@
 defmodule Rabbit.Serializer do
   @type t :: module()
-  @type error :: {:error, atom()}
+  @type error :: {:error, binary()}
 
   @callback encode(any()) :: {:ok, any()} | error()
 
