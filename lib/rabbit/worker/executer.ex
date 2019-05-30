@@ -6,7 +6,7 @@ defmodule Rabbit.Worker.Executer do
   require Logger
 
   @opts %{
-    timeout: [type: :integer, default: 0]
+    timeout: [type: :integer, default: 60_000]
   }
 
   ################################
