@@ -120,6 +120,10 @@ defmodule Rabbit.Connection.Server do
 
   @doc false
   @impl GenServer
+  def handle_call(:state, _from, state) do
+    {:reply, state, state}
+  end
+
   def handle_call(:alive?, _from, state) do
     response = not is_nil(state.connection)
     {:reply, response, state}

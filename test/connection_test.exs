@@ -4,17 +4,17 @@ defmodule Rabbit.ConnectionTest do
   alias Rabbit.Connection
 
   describe "start_link/1" do
-    test "start connection" do
+    test "starts a connection" do
       assert {:ok, conn} = Connection.start_link()
       assert true = Connection.alive?(conn)
     end
 
-    test "start connection with uri" do
+    test "starts a connection with uri" do
       assert {:ok, conn} = Connection.start_link(uri: "amqp://guest:guest@localhost")
       assert true = Connection.alive?(conn)
     end
 
-    test "start connection with name" do
+    test "starts a connection with name" do
       assert {:ok, conn} = Connection.start_link(name: :foo)
       assert true = Connection.alive?(:foo)
     end
@@ -25,6 +25,16 @@ defmodule Rabbit.ConnectionTest do
       assert {:ok, conn} = Connection.start_link()
       assert :ok = Connection.stop(conn)
       refute Process.alive?(conn)
+    end
+
+    test "disconnects the amqp connection" do
+      assert {:ok, conn} = Connection.start_link()
+
+      state = GenServer.call(conn, :state)
+
+      assert Process.alive?(state.connection.pid)
+      assert :ok = Connection.stop(conn)
+      refute Process.alive?(state.connection.pid)
     end
 
     test "publishes disconnect to subscribers" do
@@ -64,7 +74,7 @@ defmodule Rabbit.ConnectionTest do
     assert_receive {:connected, %AMQP.Connection{}}
   end
 
-  test "can create connection modules" do
+  test "creating connection modules" do
     defmodule ConnOne do
       use Rabbit.Connection
     end

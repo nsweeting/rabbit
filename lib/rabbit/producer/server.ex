@@ -69,12 +69,12 @@ defmodule Rabbit.Producer.Server do
 
   @doc false
   @impl GenServer
-  def handle_call(_msg, _from, %{channel: nil} = state) do
-    {:reply, {:error, :not_connected}, state}
+  def handle_call(:state, _from, state) do
+    {:reply, state, state}
   end
 
-  def handle_call({:publish, exchange, routing_key, payload, opts}, _from, state) do
-    result = perform_publish(state, exchange, routing_key, payload, opts)
+  def handle_call({:publish, message}, _from, state) do
+    result = perform_publish(state, message)
     {:reply, result, state}
   end
 
@@ -188,7 +188,11 @@ defmodule Rabbit.Producer.Server do
     1000 * attempt
   end
 
-  defp perform_publish(state, exchange, routing_key, payload, opts) do
+  defp perform_publish(%{channel: nil}, _msg) do
+    {:error, :not_connected}
+  end
+
+  defp perform_publish(state, {exchange, routing_key, payload, opts}) do
     opts = Keyword.merge(state.publish_opts, opts)
 
     with {:ok, payload} <- encode_payload(payload, opts) do
