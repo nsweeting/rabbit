@@ -43,37 +43,9 @@ defmodule Rabbit.Consumer.Server do
   ################################
 
   @doc false
-  def child_spec(args) do
-    %{
-      id: __MODULE__,
-      start: {__MODULE__, :start_link, args}
-    }
-  end
-
-  @doc false
   def start_link(connection, opts \\ []) do
     server_opts = Keyword.take(opts, [:name])
     GenServer.start_link(__MODULE__, {connection, opts}, server_opts)
-  end
-
-  @doc false
-  def stop(consumer) do
-    GenServer.stop(consumer, :normal)
-  end
-
-  @doc false
-  def ack(consumer, delivery_tag, opts \\ []) do
-    GenServer.cast(consumer, {:ack, delivery_tag, opts})
-  end
-
-  @doc false
-  def nack(consumer, delivery_tag, opts \\ []) do
-    GenServer.cast(consumer, {:nack, delivery_tag, opts})
-  end
-
-  @doc false
-  def reject(consumer, delivery_tag, opts \\ []) do
-    GenServer.cast(consumer, {:reject, delivery_tag, opts})
   end
 
   @doc false

@@ -7,8 +7,6 @@ defmodule Rabbit.Producer.Server do
 
   import Rabbit.Utilities
 
-  alias Rabbit.Serializer
-
   @opts %{
     name: [type: [:atom, :tuple], required: false],
     module: [type: :module, required: false],
@@ -23,11 +21,6 @@ defmodule Rabbit.Producer.Server do
   @doc false
   def start_link(opts) do
     GenServer.start_link(__MODULE__, opts)
-  end
-
-  @doc false
-  def publish(producer, exchange, routing_key, payload, opts \\ [], timeout \\ 5_000) do
-    GenServer.call(producer, {:publish, exchange, routing_key, payload, opts}, timeout)
   end
 
   ################################
@@ -128,12 +121,16 @@ defmodule Rabbit.Producer.Server do
   end
 
   defp connection(state) do
-    case Rabbit.Connection.subscribe(state.connection, self()) do
-      :ok ->
-        {:ok, state}
-
-      {:error, error} ->
+    try do
+      Rabbit.Connection.subscribe(state.connection, self())
+      {:ok, state}
+    rescue
+      error ->
         log_error(state, error)
+        {:error, state}
+    catch
+      msg, reason ->
+        log_error(state, {msg, reason})
         {:error, state}
     end
   end
@@ -204,7 +201,7 @@ defmodule Rabbit.Producer.Server do
     with {:ok, content_type} when is_binary(content_type) <- Keyword.fetch(opts, :content_type),
          {:ok, serializers} <- Rabbit.Config.get(:serializers),
          {:ok, serializer} when is_atom(serializer) <- Map.fetch(serializers, content_type) do
-      Serializer.encode(serializer, payload)
+      Rabbit.Serializer.encode(serializer, payload)
     else
       :error -> {:ok, payload}
     end

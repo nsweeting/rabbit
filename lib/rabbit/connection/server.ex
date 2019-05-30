@@ -49,28 +49,6 @@ defmodule Rabbit.Connection.Server do
     GenServer.start_link(__MODULE__, opts, server_opts)
   end
 
-  @doc false
-  def stop(connection) do
-    GenServer.stop(connection, :normal)
-  end
-
-  @doc false
-  def alive?(connection, timeout \\ 5_000) do
-    GenServer.call(connection, :alive?, timeout)
-  end
-
-  @doc false
-  def subscribe(connection, subscriber \\ nil) do
-    subscriber = subscriber || self()
-    GenServer.call(connection, {:subscribe, subscriber})
-  end
-
-  @doc false
-  def unsubscribe(connection, subscriber \\ nil) do
-    subscriber = subscriber || self()
-    GenServer.call(connection, {:unsubscribe, subscriber})
-  end
-
   ################################
   # GenServer Callbacks
   ################################
