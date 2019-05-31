@@ -1,4 +1,8 @@
 defmodule Rabbit.Producer do
+  @moduledoc false
+
+  alias Rabbit.Producer
+
   @type t :: GenServer.name()
   @type start_option ::
           {:connection, Rabbit.Connection.t()}
@@ -52,17 +56,17 @@ defmodule Rabbit.Producer do
       @impl Rabbit.Producer
       def start_link(connection, opts \\ []) do
         opts = Keyword.merge(opts, name: __MODULE__, module: __MODULE__)
-        Rabbit.Producer.start_link(connection, opts)
+        Producer.start_link(connection, opts)
       end
 
       @impl Rabbit.Producer
       def stop do
-        Rabbit.Producer.stop(__MODULE__)
+        Producer.stop(__MODULE__)
       end
 
       @impl Rabbit.Producer
       def publish(exchange, routing_key, message, opts \\ [], timeout \\ 5_000) do
-        Rabbit.Producer.publish(__MODULE__, exchange, routing_key, message, opts, timeout)
+        Producer.publish(__MODULE__, exchange, routing_key, message, opts, timeout)
       end
     end
   end
@@ -82,12 +86,16 @@ defmodule Rabbit.Producer do
 
   @spec start_link(Rabbit.Connection.t(), start_options()) :: Supervisor.on_start()
   def start_link(connection, opts \\ []) do
-    Rabbit.Producer.Pool.start_link(connection, opts)
+    Producer.Pool.start_link(connection, opts)
   end
 
   @spec stop(Rabbit.Producer.t()) :: :ok
   def stop(producer) do
-    GenServer.stop(producer)
+    for {_, worker, _, _} <- GenServer.call(producer, :get_all_workers) do
+      :ok = GenServer.call(worker, :disconnect)
+    end
+
+    :poolboy.stop(producer)
   end
 
   @spec publish(

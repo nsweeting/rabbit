@@ -187,18 +187,16 @@ defmodule Rabbit.Consumer.Server do
   end
 
   defp connection(state) do
-    try do
-      Rabbit.Connection.subscribe(state.connection, self())
-      {:ok, state}
-    rescue
-      error ->
-        log_error(state, error)
-        {:error, state}
-    catch
-      msg, reason ->
-        log_error(state, {msg, reason})
-        {:error, state}
-    end
+    Rabbit.Connection.subscribe(state.connection, self())
+    {:ok, state}
+  rescue
+    error ->
+      log_error(state, error)
+      {:error, state}
+  catch
+    msg, reason ->
+      log_error(state, {msg, reason})
+      {:error, state}
   end
 
   defp channel(%{channel: nil} = state, connection) do

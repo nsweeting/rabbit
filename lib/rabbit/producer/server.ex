@@ -66,6 +66,11 @@ defmodule Rabbit.Producer.Server do
     {:reply, state, state}
   end
 
+  def handle_call(:disconnect, _from, state) do
+    state = disconnect(state)
+    {:reply, :ok, state}
+  end
+
   def handle_call({:publish, message}, _from, state) do
     result = perform_publish(state, message)
     {:reply, result, state}
@@ -101,7 +106,7 @@ defmodule Rabbit.Producer.Server do
   ################################
 
   defp producer_init(opts) do
-    {module, opts} = Keyword.pop(opts, :module)
+    module = Keyword.get(opts, :module)
 
     if callback_exported?(module, :init, 1) do
       module.init(opts)
@@ -121,18 +126,16 @@ defmodule Rabbit.Producer.Server do
   end
 
   defp connection(state) do
-    try do
-      Rabbit.Connection.subscribe(state.connection, self())
-      {:ok, state}
-    rescue
-      error ->
-        log_error(state, error)
-        {:error, state}
-    catch
-      msg, reason ->
-        log_error(state, {msg, reason})
-        {:error, state}
-    end
+    Rabbit.Connection.subscribe(state.connection, self())
+    {:ok, state}
+  rescue
+    error ->
+      log_error(state, error)
+      {:error, state}
+  catch
+    msg, reason ->
+      log_error(state, {msg, reason})
+      {:error, state}
   end
 
   defp channel(%{channel: nil} = state, connection) do

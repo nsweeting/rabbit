@@ -1,4 +1,8 @@
 defmodule Rabbit.Connection do
+  @moduledoc false
+
+  alias Rabbit.Connection
+
   @type t :: GenServer.name()
   @type uri :: String.t()
   @type option ::
@@ -20,7 +24,7 @@ defmodule Rabbit.Connection do
 
   @callback start_link(options()) :: GenServer.on_start()
 
-  @callback stop(timeout()) :: :ok | {:error, any()}
+  @callback stop() :: :ok | {:error, any()}
 
   @callback init(options()) :: {:ok, options()} | :ignore
 
@@ -46,27 +50,27 @@ defmodule Rabbit.Connection do
       @impl Rabbit.Connection
       def start_link(opts \\ []) do
         opts = Keyword.merge(opts, name: __MODULE__, module: __MODULE__)
-        Rabbit.Connection.start_link(opts)
+        Connection.start_link(opts)
       end
 
       @impl Rabbit.Connection
       def stop do
-        Rabbit.Connection.stop(__MODULE__)
-      end
-
-      @impl Rabbit.Connection
-      def subscribe(subscriber \\ nil) do
-        Rabbit.Connection.subscribe(__MODULE__, subscriber)
+        Connection.stop(__MODULE__)
       end
 
       @impl Rabbit.Connection
       def alive? do
-        Rabbit.Connection.alive?(__MODULE__)
+        Connection.alive?(__MODULE__)
+      end
+
+      @impl Rabbit.Connection
+      def subscribe(subscriber \\ nil) do
+        Connection.subscribe(__MODULE__, subscriber)
       end
 
       @impl Rabbit.Connection
       def unsubscribe(subscriber \\ nil) do
-        Rabbit.Connection.unsubscribe(__MODULE__, subscriber)
+        Connection.unsubscribe(__MODULE__, subscriber)
       end
     end
   end
@@ -86,7 +90,7 @@ defmodule Rabbit.Connection do
   @doc false
   @spec start_link(options()) :: GenServer.on_start()
   def start_link(opts \\ []) do
-    Rabbit.Connection.Server.start_link(opts)
+    Connection.Server.start_link(opts)
   end
 
   @doc false

@@ -3,8 +3,13 @@ defmodule Rabbit.Connection.Server do
 
   use GenServer
 
+  import Rabbit.Utilities
+
+  require Logger
+
   @opts %{
     name: [type: [:atom, :tuple], required: false],
+    module: [type: :module, required: false],
     uri: [type: :binary, required: false],
     username: [type: :binary, default: "guest", required: false],
     password: [type: :binary, default: "guest", required: false],
@@ -36,8 +41,6 @@ defmodule Rabbit.Connection.Server do
     :client_properties,
     :socket_options
   ]
-
-  require Logger
 
   ################################
   # Public API
@@ -127,9 +130,9 @@ defmodule Rabbit.Connection.Server do
   ################################
 
   defp connection_init(opts) do
-    {module, opts} = Keyword.pop(opts, :module)
+    module = Keyword.get(opts, :module)
 
-    if Code.ensure_loaded?(module) and function_exported?(module, :init, 1) do
+    if callback_exported?(module, :init, 1) do
       module.init(opts)
     else
       {:ok, opts}
@@ -179,11 +182,11 @@ defmodule Rabbit.Connection.Server do
   end
 
   defp monitor(state, pid, type) do
-    unless Map.has_key?(state.monitors, pid) do
+    if Map.has_key?(state.monitors, pid) do
+      state
+    else
       Process.monitor(pid)
       %{state | monitors: Map.put(state.monitors, pid, type)}
-    else
-      state
     end
   end
 

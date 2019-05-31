@@ -1,4 +1,6 @@
 defmodule Rabbit.Serializers.ETF do
+  @moduledoc false
+
   @behaviour Rabbit.Serializer
 
   @doc false

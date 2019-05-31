@@ -1,4 +1,6 @@
 defmodule Rabbit.Serializer do
+  @moduledoc false
+
   @type t :: module()
   @type error :: {:error, binary()}
 

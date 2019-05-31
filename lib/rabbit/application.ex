@@ -1,4 +1,6 @@
 defmodule Rabbit.Application do
+  @moduledoc false
+
   use Application
 
   @impl Application

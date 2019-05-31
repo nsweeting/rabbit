@@ -1,4 +1,8 @@
 defmodule Rabbit.Consumer do
+  @moduledoc false
+
+  alias Rabbit.Consumer
+
   @type t :: GenServer.name()
   @type option ::
           {:queue, String.t()}
@@ -45,11 +49,11 @@ defmodule Rabbit.Consumer do
       @impl Rabbit.Consumer
       def start_link(connection, opts \\ []) do
         opts = Keyword.merge(opts, name: __MODULE__, module: __MODULE__)
-        Rabbit.Consumer.start_link(connection, opts)
+        Consumer.start_link(connection, opts)
       end
 
       def stop do
-        Rabbit.Consumer.stop(__MODULE__)
+        Consumer.stop(__MODULE__)
       end
     end
   end
@@ -68,7 +72,7 @@ defmodule Rabbit.Consumer do
 
   @spec start_link(Rabbit.Connection.t(), options()) :: Supervisor.on_start()
   def start_link(connection, opts \\ []) do
-    Rabbit.Consumer.Server.start_link(connection, opts)
+    Consumer.Server.start_link(connection, opts)
   end
 
   @doc false

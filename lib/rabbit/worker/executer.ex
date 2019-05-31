@@ -115,7 +115,9 @@ defmodule Rabbit.Worker.Executer do
   end
 
   defp consumer_callback(state, fun, args) do
-    apply(state.message.module, fun, args) |> handle_result()
+    state.message.module
+    |> apply(fun, args)
+    |> handle_result()
   end
 
   defp consumer_action(message, action, opts) do

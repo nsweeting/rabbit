@@ -25,5 +25,39 @@ defmodule Rabbit.ProducerTest do
       assert :ok = Producer.stop(pro)
       refute Process.alive?(pro)
     end
+
+    test "disconnects the amqp channel" do
+      assert {:ok, conn} = Connection.start_link()
+      assert {:ok, pro} = Producer.start_link(conn)
+
+      :timer.sleep(50)
+      [worker] = GenServer.call(pro, :get_avail_workers)
+      state = GenServer.call(worker, :state)
+
+      assert Process.alive?(state.channel.pid)
+      assert :ok = Producer.stop(pro)
+
+      refute Process.alive?(state.channel.pid)
+    end
+  end
+
+  describe "publish/6" do
+    test "publishes payload to queue" do
+      {:ok, amqp_conn} = AMQP.Connection.open()
+      {:ok, amqp_chan} = AMQP.Channel.open(amqp_conn)
+      AMQP.Queue.declare(amqp_chan, "foo")
+      AMQP.Queue.purge(amqp_chan, "foo")
+
+      assert {:ok, conn} = Connection.start_link()
+      assert {:ok, pro} = Producer.start_link(conn)
+
+      :timer.sleep(50)
+
+      assert :ok = Producer.publish(pro, "", "foo", "bar")
+
+      :timer.sleep(50)
+
+      assert 1 = AMQP.Queue.message_count(amqp_chan, "foo")
+    end
   end
 end

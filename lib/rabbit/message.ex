@@ -1,4 +1,6 @@
 defmodule Rabbit.Message do
+  @moduledoc false
+
   defstruct [
     :consumer,
     :module,

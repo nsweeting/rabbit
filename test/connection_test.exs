@@ -74,6 +74,42 @@ defmodule Rabbit.ConnectionTest do
     assert_receive {:connected, %AMQP.Connection{}}
   end
 
+  test "removes dead monitors" do
+    assert {:ok, conn} = Connection.start_link()
+
+    task =
+      Task.async(fn ->
+        subscriber = self()
+        Connection.subscribe(conn, subscriber)
+        state = GenServer.call(conn, :state)
+
+        assert :subscriber = Map.get(state.monitors, subscriber)
+      end)
+
+    Task.await(task)
+    state = GenServer.call(conn, :state)
+
+    refute Map.has_key?(state.monitors, task.pid)
+  end
+
+  test "removes dead subscribers" do
+    assert {:ok, conn} = Connection.start_link()
+
+    task =
+      Task.async(fn ->
+        subscriber = self()
+        Connection.subscribe(conn, subscriber)
+        state = GenServer.call(conn, :state)
+
+        assert MapSet.member?(state.subscribers, subscriber)
+      end)
+
+    Task.await(task)
+    state = GenServer.call(conn, :state)
+
+    refute MapSet.member?(state.subscribers, task.pid)
+  end
+
   test "creating connection modules" do
     defmodule ConnOne do
       use Rabbit.Connection

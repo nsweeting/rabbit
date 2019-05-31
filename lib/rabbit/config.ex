@@ -1,4 +1,6 @@
 defmodule Rabbit.Config do
+  @moduledoc false
+
   use GenServer
 
   @table __MODULE__

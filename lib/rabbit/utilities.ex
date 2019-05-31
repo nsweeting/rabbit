@@ -1,4 +1,6 @@
 defmodule Rabbit.Utilities do
+  @moduledoc false
+
   @doc false
   @spec callback_exported?(module(), atom(), non_neg_integer()) :: boolean()
   def callback_exported?(module, function, arity) do
