@@ -7,10 +7,10 @@ defmodule Rabbit.Consumer.Server do
 
   require Logger
 
-  @opts %{
-    name: [type: [:atom, :tuple], required: false],
+  @opts_schema %{
     module: [custom: [{__MODULE__, :validate}], required: true],
     queue: [type: :binary, required: true],
+    async_connect: [type: :boolean, default: true],
     prefetch_count: [type: :integer, default: 1],
     prefetch_size: [type: :integer, default: 0],
     consumer_tag: [type: :binary, default: ""],
@@ -18,7 +18,8 @@ defmodule Rabbit.Consumer.Server do
     no_ack: [type: :boolean, default: false],
     exclusive: [type: :boolean, default: false],
     no_wait: [type: :boolean, default: false],
-    arguments: [type: :list, default: []]
+    arguments: [type: :list, default: []],
+    timeout: [type: [:integer, :atom], required: false]
   }
 
   @qos_opts [
@@ -43,8 +44,7 @@ defmodule Rabbit.Consumer.Server do
   ################################
 
   @doc false
-  def start_link(connection, opts \\ []) do
-    server_opts = Keyword.take(opts, [:name])
+  def start_link(connection, opts \\ [], server_opts \\ []) do
     GenServer.start_link(__MODULE__, {connection, opts}, server_opts)
   end
 
@@ -61,7 +61,7 @@ defmodule Rabbit.Consumer.Server do
   @impl GenServer
   def init({connection, opts}) do
     with {:ok, opts} <- consumer_init(opts) do
-      opts = KeywordValidator.validate!(opts, @opts)
+      opts = KeywordValidator.validate!(opts, @opts_schema)
       state = init_state(connection, opts)
       {:ok, state, {:continue, :connection}}
     end
@@ -71,13 +71,20 @@ defmodule Rabbit.Consumer.Server do
   @impl GenServer
   def handle_continue(:connection, state) do
     case connection(state) do
-      {:ok, state} -> {:noreply, state}
-      {:error, state} -> {:noreply, state, {:continue, :restart_delay}}
+      :ok ->
+        {:noreply, state}
+
+      :error ->
+        {:noreply, state, {:continue, :restart_delay}}
+
+      {:ok, connection} ->
+        {:noreply, state, {:continue, {:channel, connection}}}
     end
   end
 
   def handle_continue({:channel, connection}, state) do
     case channel(state, connection) do
+      :ok -> {:noreply, state}
       {:ok, state} -> {:noreply, state, {:continue, :after_connect}}
       {:error, state} -> {:noreply, state, {:continue, :restart_delay}}
     end
@@ -100,6 +107,12 @@ defmodule Rabbit.Consumer.Server do
   def handle_continue(:restart_delay, state) do
     state = restart_delay(state)
     {:noreply, state}
+  end
+
+  @doc false
+  @impl GenServer
+  def handle_call(:state, _from, state) do
+    {:reply, state, state}
   end
 
   @doc false
@@ -174,8 +187,9 @@ defmodule Rabbit.Consumer.Server do
 
   defp init_state(connection, opts) do
     %{
-      name: Keyword.get(opts, :name, self()),
+      name: process_name(self()),
       module: Keyword.get(opts, :module),
+      async_connect: Keyword.get(opts, :async_connect),
       connection: connection,
       channel: nil,
       restart_attempts: 0,
@@ -186,17 +200,29 @@ defmodule Rabbit.Consumer.Server do
     }
   end
 
+  defp connection(%{async_connect: false} = state) do
+    case Rabbit.Connection.fetch(state.connection) do
+      {:ok, _} = result ->
+        Rabbit.Connection.subscribe(state.connection, self())
+        result
+
+      _ ->
+        raise RuntimeError, "synchronous connection failed"
+    end
+  end
+
   defp connection(state) do
     Rabbit.Connection.subscribe(state.connection, self())
-    {:ok, state}
+    Rabbit.Connection.async_fetch(state.connection)
+    :ok
   rescue
     error ->
       log_error(state, error)
-      {:error, state}
+      :error
   catch
     msg, reason ->
       log_error(state, {msg, reason})
-      {:error, state}
+      :error
   end
 
   defp channel(%{channel: nil} = state, connection) do
@@ -212,8 +238,8 @@ defmodule Rabbit.Consumer.Server do
     end
   end
 
-  defp channel(state, _connection) do
-    {:ok, state}
+  defp channel(_state, _connection) do
+    :ok
   end
 
   defp after_connect(state) do

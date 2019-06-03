@@ -5,7 +5,7 @@ defmodule Rabbit.Worker.Executer do
 
   require Logger
 
-  @opts %{
+  @opts_schema %{
     timeout: [type: :integer, default: 60_000]
   }
 
@@ -34,7 +34,7 @@ defmodule Rabbit.Worker.Executer do
   @doc false
   @impl GenServer
   def init({message, opts}) do
-    opts = KeywordValidator.validate!(opts, @opts)
+    opts = KeywordValidator.validate!(opts, @opts_schema)
     state = init_state(message, opts)
     set_timeout(state.timeout)
     {:ok, state, {:continue, :execute}}

@@ -7,7 +7,6 @@ defmodule Rabbit.Connection do
   @type uri :: String.t()
   @type option ::
           {:module, module()}
-          | {:name, GenServer.name()}
           | {:uri, String.t()}
           | {:username, String.t()}
           | {:password, String.t()}
@@ -28,52 +27,15 @@ defmodule Rabbit.Connection do
 
   @callback init(options()) :: {:ok, options()} | :ignore
 
+  @callback fetch() :: {:ok, Rabbit.Connection.t()} | {:error, :not_connected}
+
+  @callback async_fetch() :: :ok
+
   @callback alive?() :: boolean()
 
   @callback subscribe(pid() | nil) :: :ok
 
-  @callback unsubscribe(pid() | nil) :: :ok
-
   @optional_callbacks init: 1
-
-  defmacro __using__(_) do
-    quote do
-      @behaviour Rabbit.Connection
-
-      def child_spec(opts) do
-        %{
-          id: __MODULE__,
-          start: {__MODULE__, :start_link, opts}
-        }
-      end
-
-      @impl Rabbit.Connection
-      def start_link(opts \\ []) do
-        opts = Keyword.merge(opts, name: __MODULE__, module: __MODULE__)
-        Connection.start_link(opts)
-      end
-
-      @impl Rabbit.Connection
-      def stop do
-        Connection.stop(__MODULE__)
-      end
-
-      @impl Rabbit.Connection
-      def alive? do
-        Connection.alive?(__MODULE__)
-      end
-
-      @impl Rabbit.Connection
-      def subscribe(subscriber \\ nil) do
-        Connection.subscribe(__MODULE__, subscriber)
-      end
-
-      @impl Rabbit.Connection
-      def unsubscribe(subscriber \\ nil) do
-        Connection.unsubscribe(__MODULE__, subscriber)
-      end
-    end
-  end
 
   ################################
   # Public API
@@ -88,15 +50,27 @@ defmodule Rabbit.Connection do
   end
 
   @doc false
-  @spec start_link(options()) :: GenServer.on_start()
-  def start_link(opts \\ []) do
-    Connection.Server.start_link(opts)
+  @spec start_link(options(), GenServer.options()) :: GenServer.on_start()
+  def start_link(opts \\ [], server_opts \\ []) do
+    Connection.Server.start_link(opts, server_opts)
   end
 
   @doc false
   @spec stop(Rabbit.Connection.t()) :: :ok
   def stop(connection) do
     GenServer.stop(connection, :normal)
+  end
+
+  @doc false
+  @spec fetch(Rabbit.Connection.t()) :: {:ok, AMQP.Connection.t()} | {:error, :no_connection}
+  def fetch(connection) do
+    GenServer.call(connection, :fetch)
+  end
+
+  @doc false
+  @spec async_fetch(Rabbit.Connection.t()) :: :ok
+  def async_fetch(connection) do
+    GenServer.call(connection, :async_fetch)
   end
 
   @doc false
@@ -112,10 +86,47 @@ defmodule Rabbit.Connection do
     GenServer.call(connection, {:subscribe, subscriber})
   end
 
-  @doc false
-  @spec unsubscribe(Rabbit.Connection.t(), pid() | nil) :: :ok
-  def unsubscribe(connection, subscriber \\ nil) do
-    subscriber = subscriber || self()
-    GenServer.call(connection, {:unsubscribe, subscriber})
+  defmacro __using__(_) do
+    quote do
+      @behaviour Rabbit.Connection
+
+      def child_spec(opts) do
+        %{
+          id: __MODULE__,
+          start: {__MODULE__, :start_link, opts}
+        }
+      end
+
+      @impl Rabbit.Connection
+      def start_link(opts \\ [], server_opts \\ []) do
+        opts = Keyword.put(opts, :module, __MODULE__)
+        server_opts = Keyword.put(server_opts, :name, __MODULE__)
+
+        Connection.start_link(opts, server_opts)
+      end
+
+      @impl Rabbit.Connection
+      def stop do
+        Connection.stop(__MODULE__)
+      end
+
+      def fetch do
+        Connection.fetch(__MODULE__)
+      end
+
+      def async_fetch do
+        Connection.async_fetch(__MODULE__)
+      end
+
+      @impl Rabbit.Connection
+      def alive? do
+        Connection.alive?(__MODULE__)
+      end
+
+      @impl Rabbit.Connection
+      def subscribe(subscriber \\ nil) do
+        Connection.subscribe(__MODULE__, subscriber)
+      end
+    end
   end
 end

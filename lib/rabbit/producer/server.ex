@@ -7,11 +7,11 @@ defmodule Rabbit.Producer.Server do
 
   import Rabbit.Utilities
 
-  @opts %{
-    name: [type: [:atom, :tuple], required: false],
+  @opts_schema %{
     module: [type: :module, required: false],
     connection: [type: [:atom, :tuple, :pid], required: true],
-    publish_opts: [type: :list, default: []]
+    publish_opts: [type: :list, default: []],
+    async_connect: [type: :boolean, default: true]
   }
 
   ################################
@@ -30,11 +30,9 @@ defmodule Rabbit.Producer.Server do
   @doc false
   @impl GenServer
   def init(opts) do
-    {name, opts} = Keyword.pop(opts, :name)
-
     with {:ok, opts} <- producer_init(opts) do
-      opts = KeywordValidator.validate!(opts, @opts)
-      state = init_state(name, opts)
+      opts = KeywordValidator.validate!(opts, @opts_schema)
+      state = init_state(opts)
       {:ok, state, {:continue, :connection}}
     end
   end
@@ -43,8 +41,14 @@ defmodule Rabbit.Producer.Server do
   @impl GenServer
   def handle_continue(:connection, state) do
     case connection(state) do
-      {:ok, state} -> {:noreply, state}
-      {:error, state} -> {:noreply, state, {:continue, :restart_delay}}
+      :ok ->
+        {:noreply, state}
+
+      :error ->
+        {:noreply, state, {:continue, :restart_delay}}
+
+      {:ok, connection} ->
+        {:noreply, state, {:continue, {:channel, connection}}}
     end
   end
 
@@ -115,27 +119,40 @@ defmodule Rabbit.Producer.Server do
     end
   end
 
-  defp init_state(name, opts) do
+  defp init_state(opts) do
     %{
-      name: name || self(),
+      name: process_name(self()),
       connection: Keyword.get(opts, :connection),
       publish_opts: Keyword.get(opts, :publish_opts),
+      async_connect: Keyword.get(opts, :async_connect),
       channel: nil,
       restart_attempts: 0
     }
   end
 
+  defp connection(%{async_connect: false} = state) do
+    case Rabbit.Connection.fetch(state.connection) do
+      {:ok, _} = result ->
+        Rabbit.Connection.subscribe(state.connection, self())
+        result
+
+      _ ->
+        raise RuntimeError, "synchronous connection failed"
+    end
+  end
+
   defp connection(state) do
     Rabbit.Connection.subscribe(state.connection, self())
-    {:ok, state}
+    Rabbit.Connection.async_fetch(state.connection)
+    :ok
   rescue
     error ->
       log_error(state, error)
-      {:error, state}
+      :error
   catch
     msg, reason ->
       log_error(state, {msg, reason})
-      {:error, state}
+      :error
   end
 
   defp channel(%{channel: nil} = state, connection) do

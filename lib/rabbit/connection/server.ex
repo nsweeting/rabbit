@@ -7,8 +7,7 @@ defmodule Rabbit.Connection.Server do
 
   require Logger
 
-  @opts %{
-    name: [type: [:atom, :tuple], required: false],
+  @opts_schema %{
     module: [type: :module, required: false],
     uri: [type: :binary, required: false],
     username: [type: :binary, default: "guest", required: false],
@@ -47,8 +46,7 @@ defmodule Rabbit.Connection.Server do
   ################################
 
   @doc false
-  def start_link(opts \\ []) do
-    server_opts = Keyword.take(opts, [:name])
+  def start_link(opts \\ [], server_opts \\ []) do
     GenServer.start_link(__MODULE__, opts, server_opts)
   end
 
@@ -60,7 +58,7 @@ defmodule Rabbit.Connection.Server do
   @impl GenServer
   def init(opts) do
     with {:ok, opts} <- connection_init(opts) do
-      opts = KeywordValidator.validate!(opts, @opts)
+      opts = KeywordValidator.validate!(opts, @opts_schema)
       state = init_state(opts)
       {:ok, state, {:continue, :connect}}
     end
@@ -105,18 +103,23 @@ defmodule Rabbit.Connection.Server do
     {:reply, state, state}
   end
 
-  def handle_call(:alive?, _from, state) do
-    response = not is_nil(state.connection)
-    {:reply, response, state}
+  def handle_call(:fetch, _from, state) do
+    result = fetch(state)
+    {:reply, result, state}
   end
 
-  def handle_call({:subscribe, subscriber}, _from, state) do
-    state = perform_subscribe(state, subscriber)
+  def handle_call(:async_fetch, {pid, _ref}, state) do
+    async_fetch(state, pid)
     {:reply, :ok, state}
   end
 
-  def handle_call({:unsubscribe, subscriber}, _from, state) do
-    state = cleanup(state, subscriber, :unsubscribe)
+  def handle_call(:alive?, _from, state) do
+    result = alive?(state)
+    {:reply, result, state}
+  end
+
+  def handle_call({:subscribe, subscriber}, _from, state) do
+    state = subscribe(state, subscriber)
     {:reply, :ok, state}
   end
 
@@ -141,7 +144,7 @@ defmodule Rabbit.Connection.Server do
 
   defp init_state(opts) do
     %{
-      name: Keyword.get(opts, :name, self()),
+      name: process_name(self()),
       connection_opts: Keyword.get(opts, :uri) || Keyword.take(opts, @connect_opts),
       connection: nil,
       monitors: %{},
@@ -181,6 +184,15 @@ defmodule Rabbit.Connection.Server do
     %{state | connection: nil}
   end
 
+  defp fetch(%{connection: nil}), do: {:error, :no_connection}
+  defp fetch(state), do: {:ok, state.connection}
+
+  defp async_fetch(%{connection: nil}, _pid), do: :ok
+  defp async_fetch(state, pid), do: publish_connected([pid], state.connection)
+
+  defp alive?(%{connection: nil}), do: false
+  defp alive?(_state), do: true
+
   defp monitor(state, pid, type) do
     if Map.has_key?(state.monitors, pid) do
       state
@@ -193,22 +205,19 @@ defmodule Rabbit.Connection.Server do
   defp cleanup(state, pid, reason) do
     state =
       case Map.get(state.monitors, pid) do
-        :connection -> connection_down(state, reason)
-        :subscriber -> subscriber_down(state, pid)
-        _ -> state
+        :connection ->
+          log_error(state, reason)
+          publish_disconnected(state, reason)
+          %{state | retry_attempts: 0, connection: nil}
+
+        :subscriber ->
+          %{state | subscribers: MapSet.delete(state.subscribers, pid)}
+
+        _ ->
+          state
       end
 
     %{state | monitors: Map.delete(state.monitors, pid)}
-  end
-
-  defp connection_down(state, reason) do
-    log_error(state, reason)
-    publish_disconnected(state, reason)
-    %{state | retry_attempts: 0, connection: nil}
-  end
-
-  defp subscriber_down(state, pid) do
-    %{state | subscribers: MapSet.delete(state.subscribers, pid)}
   end
 
   defp retry_delay(state) do
@@ -227,16 +236,9 @@ defmodule Rabbit.Connection.Server do
     end
   end
 
-  defp perform_subscribe(%{connection: nil} = state, subscriber) do
+  defp subscribe(state, subscriber) do
     state = monitor(state, subscriber, :subscriber)
     %{state | subscribers: MapSet.put(state.subscribers, subscriber)}
-  end
-
-  defp perform_subscribe(state, subscriber) do
-    state = monitor(state, subscriber, :subscriber)
-    state = %{state | subscribers: MapSet.put(state.subscribers, subscriber)}
-    publish([subscriber], {:connected, state.connection})
-    state
   end
 
   defp publish_connected(state_or_subscribers, connection) do

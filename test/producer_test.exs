@@ -28,9 +28,8 @@ defmodule Rabbit.ProducerTest do
 
     test "disconnects the amqp channel" do
       assert {:ok, conn} = Connection.start_link()
-      assert {:ok, pro} = Producer.start_link(conn)
+      assert {:ok, pro} = Producer.start_link(conn, async_connect: false)
 
-      :timer.sleep(50)
       [worker] = GenServer.call(pro, :get_avail_workers)
       state = GenServer.call(worker, :state)
 
@@ -49,15 +48,61 @@ defmodule Rabbit.ProducerTest do
       AMQP.Queue.purge(amqp_chan, "foo")
 
       assert {:ok, conn} = Connection.start_link()
-      assert {:ok, pro} = Producer.start_link(conn)
-
-      :timer.sleep(50)
-
+      assert {:ok, pro} = Producer.start_link(conn, async_connect: false)
       assert :ok = Producer.publish(pro, "", "foo", "bar")
 
       :timer.sleep(50)
 
       assert 1 = AMQP.Queue.message_count(amqp_chan, "foo")
     end
+  end
+
+  @tag capture_log: true
+  test "will reconnect when connection stops" do
+    {:ok, amqp_conn} = AMQP.Connection.open()
+    {:ok, amqp_chan} = AMQP.Channel.open(amqp_conn)
+    AMQP.Queue.declare(amqp_chan, "foo")
+    AMQP.Queue.purge(amqp_chan, "foo")
+
+    assert {:ok, conn} = Connection.start_link()
+    assert {:ok, pro} = Producer.start_link(conn)
+
+    state = GenServer.call(conn, :state)
+    AMQP.Connection.close(state.connection)
+    :timer.sleep(50)
+
+    assert :ok = Producer.publish(pro, "", "foo", "bar")
+  end
+
+  test "creating producer modules" do
+    defmodule ProOne do
+      use Rabbit.Producer
+    end
+
+    {:ok, amqp_conn} = AMQP.Connection.open()
+    {:ok, amqp_chan} = AMQP.Channel.open(amqp_conn)
+    AMQP.Queue.declare(amqp_chan, "foo")
+    AMQP.Queue.purge(amqp_chan, "foo")
+
+    assert {:ok, conn} = Connection.start_link()
+    assert {:ok, pro} = ProOne.start_link(conn, async_connect: false)
+    assert :ok = ProOne.publish("", "foo", "bar")
+  end
+
+  test "producer modules use init callback" do
+    Process.register(self(), :pro_two)
+
+    defmodule ProTwo do
+      use Rabbit.Producer
+
+      def init(opts) do
+        send(:pro_two, :init_callback)
+        {:ok, opts}
+      end
+    end
+
+    assert {:ok, conn} = Connection.start_link()
+    assert {:ok, pro} = ProTwo.start_link(conn)
+    assert_receive :init_callback
   end
 end

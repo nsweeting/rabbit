@@ -5,9 +5,10 @@ defmodule Rabbit.Producer do
 
   @type t :: GenServer.name()
   @type start_option ::
-          {:connection, Rabbit.Connection.t()}
-          | {:pool_size, non_neg_integer()}
+          {:pool_size, non_neg_integer()}
           | {:max_overflow, non_neg_integer()}
+          | {:sync_connect, boolean()}
+          | {:publish_opts, publish_options()}
   @type start_options :: [start_option()]
   @type exchange :: String.t()
   @type routing_key :: String.t()
@@ -41,36 +42,6 @@ defmodule Rabbit.Producer do
 
   @optional_callbacks init: 1
 
-  defmacro __using__(_) do
-    quote do
-      @behaviour Rabbit.Producer
-
-      def child_spec(args) do
-        %{
-          id: __MODULE__,
-          start: {__MODULE__, :start_link, args},
-          type: :supervisor
-        }
-      end
-
-      @impl Rabbit.Producer
-      def start_link(connection, opts \\ []) do
-        opts = Keyword.merge(opts, name: __MODULE__, module: __MODULE__)
-        Producer.start_link(connection, opts)
-      end
-
-      @impl Rabbit.Producer
-      def stop do
-        Producer.stop(__MODULE__)
-      end
-
-      @impl Rabbit.Producer
-      def publish(exchange, routing_key, message, opts \\ [], timeout \\ 5_000) do
-        Producer.publish(__MODULE__, exchange, routing_key, message, opts, timeout)
-      end
-    end
-  end
-
   ################################
   # Public API
   ################################
@@ -84,9 +55,10 @@ defmodule Rabbit.Producer do
     }
   end
 
-  @spec start_link(Rabbit.Connection.t(), start_options()) :: Supervisor.on_start()
-  def start_link(connection, opts \\ []) do
-    Producer.Pool.start_link(connection, opts)
+  @spec start_link(Rabbit.Connection.t(), start_options(), GenServer.options()) ::
+          Supervisor.on_start()
+  def start_link(connection, opts \\ [], server_opts \\ []) do
+    Producer.Pool.start_link(connection, opts, server_opts)
   end
 
   @spec stop(Rabbit.Producer.t()) :: :ok
@@ -108,11 +80,37 @@ defmodule Rabbit.Producer do
         ) :: :ok | {:error, any()}
   def publish(producer, exchange, routing_key, payload, opts \\ [], timeout \\ 5_000) do
     message = {exchange, routing_key, payload, opts}
-    :poolboy.transaction(producer, &do_publish(&1, message, timeout))
+    :poolboy.transaction(producer, &GenServer.call(&1, {:publish, message}, timeout))
   end
 
-  @doc false
-  defp do_publish(producer, message, timeout) do
-    GenServer.call(producer, {:publish, message}, timeout)
+  defmacro __using__(_) do
+    quote do
+      @behaviour Rabbit.Producer
+
+      def child_spec(args) do
+        %{
+          id: __MODULE__,
+          start: {__MODULE__, :start_link, args}
+        }
+      end
+
+      @impl Rabbit.Producer
+      def start_link(connection, opts \\ [], server_opts \\ []) do
+        opts = Keyword.put(opts, :module, __MODULE__)
+        server_opts = Keyword.put(opts, :name, __MODULE__)
+
+        Producer.start_link(connection, opts, server_opts)
+      end
+
+      @impl Rabbit.Producer
+      def stop do
+        Producer.stop(__MODULE__)
+      end
+
+      @impl Rabbit.Producer
+      def publish(exchange, routing_key, message, opts \\ [], timeout \\ 5_000) do
+        Producer.publish(__MODULE__, exchange, routing_key, message, opts, timeout)
+      end
+    end
   end
 end

@@ -23,40 +23,17 @@ defmodule Rabbit.Consumer do
 
   @callback start_link(Rabbit.Connection.t(), options()) :: Supervisor.on_start()
 
-  @callback stop(timeout()) :: :ok | {:error, any()}
+  @callback stop() :: :ok
 
   @callback init(options()) :: {:ok, options()} | :ignore
 
-  @callback after_connect(AMQP.Channel.t(), queue :: String.t()) :: :ok | any()
+  @callback after_connect(AMQP.Channel.t(), queue :: String.t()) :: :ok
 
   @callback handle_message(Rabbit.Message.t()) :: result() | any()
 
   @callback handle_error(Rabbit.Message.t()) :: result() | any()
 
   @optional_callbacks init: 1, after_connect: 2
-
-  defmacro __using__(_) do
-    quote do
-      @behaviour Rabbit.Consumer
-
-      def child_spec(args) do
-        %{
-          id: __MODULE__,
-          start: {__MODULE__, :start_link, args}
-        }
-      end
-
-      @impl Rabbit.Consumer
-      def start_link(connection, opts \\ []) do
-        opts = Keyword.merge(opts, name: __MODULE__, module: __MODULE__)
-        Consumer.start_link(connection, opts)
-      end
-
-      def stop do
-        Consumer.stop(__MODULE__)
-      end
-    end
-  end
 
   ################################
   # Public API
@@ -70,9 +47,9 @@ defmodule Rabbit.Consumer do
     }
   end
 
-  @spec start_link(Rabbit.Connection.t(), options()) :: Supervisor.on_start()
-  def start_link(connection, opts \\ []) do
-    Consumer.Server.start_link(connection, opts)
+  @spec start_link(Rabbit.Connection.t(), options(), GenServer.options()) :: Supervisor.on_start()
+  def start_link(connection, opts \\ [], server_opts \\ []) do
+    Consumer.Server.start_link(connection, opts, server_opts)
   end
 
   @doc false
@@ -93,5 +70,31 @@ defmodule Rabbit.Consumer do
   @doc false
   def reject(consumer, delivery_tag, opts \\ []) do
     GenServer.cast(consumer, {:reject, delivery_tag, opts})
+  end
+
+  defmacro __using__(_) do
+    quote do
+      @behaviour Rabbit.Consumer
+
+      def child_spec(args) do
+        %{
+          id: __MODULE__,
+          start: {__MODULE__, :start_link, args}
+        }
+      end
+
+      @impl Rabbit.Consumer
+      def start_link(connection, opts \\ [], server_opts \\ []) do
+        opts = Keyword.put(opts, :module, __MODULE__)
+        server_opts = Keyword.put(server_opts, :name, __MODULE__)
+
+        Consumer.start_link(connection, opts, server_opts)
+      end
+
+      @impl Rabbit.Consumer
+      def stop do
+        Consumer.stop(__MODULE__)
+      end
+    end
   end
 end

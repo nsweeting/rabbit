@@ -9,7 +9,7 @@ defmodule Rabbit.Serializers.ETF do
     data = data |> :erlang.term_to_binary() |> Base.encode64(padding: false)
     {:ok, data}
   rescue
-    _ -> {:error, :etf_encoding}
+    error -> {:error, error}
   end
 
   @doc false
@@ -18,6 +18,6 @@ defmodule Rabbit.Serializers.ETF do
     data = data |> Base.decode64!(padding: false) |> :erlang.binary_to_term()
     {:ok, data}
   rescue
-    _ -> {:error, :etf_decoding}
+    error -> {:error, error}
   end
 end
