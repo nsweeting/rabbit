@@ -3,7 +3,7 @@ defmodule Rabbit.ConsumerTest do
 
   alias Rabbit.{Connection, Consumer, Producer}
 
-  defmodule ConOne do
+  defmodule ConsumerOne do
     use Rabbit.Consumer
 
     def after_connect(chan, queue) do
@@ -33,7 +33,7 @@ defmodule Rabbit.ConsumerTest do
 
   describe "start_link/1" do
     test "starts consumer", meta do
-      assert {:ok, _con} = Consumer.start_link(meta.conn, module: ConOne, queue: "consumer")
+      assert {:ok, _con} = Consumer.start_link(meta.conn, module: ConsumerOne, queue: "consumer")
     end
   end
 
@@ -91,9 +91,30 @@ defmodule Rabbit.ConsumerTest do
     assert_receive {:handle_message, ^ref3}
   end
 
+  test "creating consumer modules", meta do
+    defmodule ConsumerTwo do
+      use Rabbit.Consumer
+
+      def after_connect(chan, queue) do
+        AMQP.Queue.declare(chan, queue, auto_delete: true)
+        AMQP.Queue.purge(chan, queue)
+
+        :ok
+      end
+
+      def handle_message(_msg), do: :ok
+
+      def handle_error(_msg), do: :ok
+    end
+
+    assert {:ok, consumer} = ConsumerTwo.start_link(meta.conn, queue: queue_name())
+    assert true = Process.alive?(consumer)
+    assert :ok = await_consuming(consumer)
+  end
+
   defp start_consumer(meta, opts \\ []) do
-    queue = :crypto.strong_rand_bytes(8) |> Base.encode64()
-    opts = [module: ConOne, queue: queue, async_connect: false] ++ opts
+    queue = queue_name()
+    opts = [module: ConsumerOne, queue: queue, async_connect: false] ++ opts
     {:ok, consumer} = Consumer.start_link(meta.conn, opts)
     await_consuming(consumer)
     {:ok, consumer, queue}
@@ -116,5 +137,9 @@ defmodule Rabbit.ConsumerTest do
       :timer.sleep(10)
       await_consuming(consumer)
     end
+  end
+
+  defp queue_name do
+    :crypto.strong_rand_bytes(8) |> Base.encode64()
   end
 end
