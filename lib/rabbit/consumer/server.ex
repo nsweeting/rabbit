@@ -192,6 +192,8 @@ defmodule Rabbit.Consumer.Server do
       async_connect: Keyword.get(opts, :async_connect),
       connection: connection,
       channel: nil,
+      consuming: false,
+      consumer_tag: nil,
       restart_attempts: 0,
       queue: Keyword.get(opts, :queue),
       qos_opts: Keyword.take(opts, @qos_opts),
@@ -259,12 +261,12 @@ defmodule Rabbit.Consumer.Server do
 
   defp consume(state) do
     with :ok <- AMQP.Basic.qos(state.channel, state.qos_opts),
-         {:ok, _} <- AMQP.Basic.consume(state.channel, state.queue, self(), state.consume_opts) do
+         {:ok, tag} <- AMQP.Basic.consume(state.channel, state.queue, self(), state.consume_opts) do
       Logger.info("""
       [Rabbit.Consumer] #{inspect(state.name)}: consumer started.
       """)
 
-      {:ok, state}
+      {:ok, %{state | consuming: true, consumer_tag: tag}}
     else
       error ->
         log_error(state, error)
@@ -278,7 +280,7 @@ defmodule Rabbit.Consumer.Server do
 
   defp disconnect(%{channel: channel} = state) do
     if Process.alive?(channel.pid), do: AMQP.Channel.close(channel)
-    %{state | channel: nil}
+    %{state | channel: nil, consuming: false, consumer_tag: nil}
   end
 
   defp restart_delay(state) do
@@ -294,7 +296,7 @@ defmodule Rabbit.Consumer.Server do
 
   defp channel_down(state, reason) do
     log_error(state, reason)
-    %{state | restart_attempts: 0, channel: nil}
+    %{state | restart_attempts: 0, channel: nil, consuming: false, consumer_tag: nil}
   end
 
   defp calculate_delay(attempt) when attempt > 5 do

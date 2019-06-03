@@ -61,8 +61,8 @@ defmodule Rabbit.ProducerTest do
   test "will reconnect when connection stops" do
     {:ok, amqp_conn} = AMQP.Connection.open()
     {:ok, amqp_chan} = AMQP.Channel.open(amqp_conn)
-    AMQP.Queue.declare(amqp_chan, "foo")
-    AMQP.Queue.purge(amqp_chan, "foo")
+    AMQP.Queue.declare(amqp_chan, "producer")
+    AMQP.Queue.purge(amqp_chan, "producer")
 
     assert {:ok, conn} = Connection.start_link()
     assert {:ok, pro} = Producer.start_link(conn)
@@ -71,7 +71,7 @@ defmodule Rabbit.ProducerTest do
     AMQP.Connection.close(state.connection)
     :timer.sleep(50)
 
-    assert :ok = Producer.publish(pro, "", "foo", "bar")
+    assert :ok = Producer.publish(pro, "", "producer", "bar")
   end
 
   test "creating producer modules" do
@@ -81,12 +81,12 @@ defmodule Rabbit.ProducerTest do
 
     {:ok, amqp_conn} = AMQP.Connection.open()
     {:ok, amqp_chan} = AMQP.Channel.open(amqp_conn)
-    AMQP.Queue.declare(amqp_chan, "foo")
-    AMQP.Queue.purge(amqp_chan, "foo")
+    AMQP.Queue.declare(amqp_chan, "producer")
+    AMQP.Queue.purge(amqp_chan, "producer")
 
     assert {:ok, conn} = Connection.start_link()
     assert {:ok, pro} = ProOne.start_link(conn, async_connect: false)
-    assert :ok = ProOne.publish("", "foo", "bar")
+    assert :ok = ProOne.publish("", "producer", "bar")
   end
 
   test "producer modules use init callback" do
