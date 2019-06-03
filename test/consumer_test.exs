@@ -1,7 +1,7 @@
 defmodule Rabbit.ConsumerTest do
   use ExUnit.Case
 
-  alias Rabbit.{Consumer, Connection, Producer}
+  alias Rabbit.{Connection, Consumer, Producer}
 
   defmodule ConOne do
     use Rabbit.Consumer
@@ -15,13 +15,13 @@ defmodule Rabbit.ConsumerTest do
 
     def handle_message(msg) do
       decoded_payload = Base.decode64!(msg.payload)
-      {pid, signature} = :erlang.binary_to_term(decoded_payload)
-      send(pid, {:handle_message, signature})
-      {:ack, msg}
+      {pid, ref} = :erlang.binary_to_term(decoded_payload)
+      send(pid, {:handle_message, ref})
+      :ok
     end
 
-    def handle_error(msg) do
-      {:nack, msg}
+    def handle_error(_) do
+      :ok
     end
   end
 
@@ -74,21 +74,21 @@ defmodule Rabbit.ConsumerTest do
   test "will consume messages", meta do
     assert {:ok, consumer, queue} = start_consumer(meta)
 
-    signature = publish_message(meta, queue)
+    ref = publish_message(meta, queue)
 
-    assert_receive {:handle_message, ^signature}
+    assert_receive {:handle_message, ^ref}
   end
 
   test "will consume messages with prefetch_count", meta do
     assert {:ok, consumer, queue} = start_consumer(meta, prefetch_count: 3)
 
-    signature1 = publish_message(meta, queue)
-    signature2 = publish_message(meta, queue)
-    signature3 = publish_message(meta, queue)
+    ref1 = publish_message(meta, queue)
+    ref2 = publish_message(meta, queue)
+    ref3 = publish_message(meta, queue)
 
-    assert_receive {:handle_message, ^signature1}
-    assert_receive {:handle_message, ^signature2}
-    assert_receive {:handle_message, ^signature3}
+    assert_receive {:handle_message, ^ref1}
+    assert_receive {:handle_message, ^ref2}
+    assert_receive {:handle_message, ^ref3}
   end
 
   defp start_consumer(meta, opts \\ []) do
