@@ -110,10 +110,12 @@ defmodule Rabbit.Connection do
         Connection.stop(__MODULE__)
       end
 
+      @impl Rabbit.Connection
       def fetch do
         Connection.fetch(__MODULE__)
       end
 
+      @impl Rabbit.Connection
       def async_fetch do
         Connection.async_fetch(__MODULE__)
       end

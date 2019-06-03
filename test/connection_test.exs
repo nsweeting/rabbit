@@ -48,19 +48,15 @@ defmodule Rabbit.ConnectionTest do
   describe "subscribe/2" do
     test "subscribes to connection" do
       assert {:ok, conn} = Connection.start_link()
-      assert :ok = Connection.subscribe(conn)
-      assert_receive {:connected, %AMQP.Connection{}}
-    end
-  end
 
-  describe "unsubscribe/2" do
-    test "unsubscribes to connection" do
-      assert {:ok, conn} = Connection.start_link()
+      state = GenServer.call(conn, :state)
+
+      refute MapSet.member?(state.subscribers, self())
       assert :ok = Connection.subscribe(conn)
-      assert_receive {:connected, %AMQP.Connection{}}
-      assert :ok = Connection.unsubscribe(conn)
-      assert :ok = Connection.stop(conn)
-      refute_receive {:disconnected, :stopped}
+
+      state = GenServer.call(conn, :state)
+
+      assert MapSet.member?(state.subscribers, self())
     end
   end
 
@@ -68,8 +64,10 @@ defmodule Rabbit.ConnectionTest do
   test "will reconnect when connection stops" do
     assert {:ok, conn} = Connection.start_link()
     assert :ok = Connection.subscribe(conn)
-    assert_receive {:connected, %AMQP.Connection{} = raw_conn}
+    assert {:ok, raw_conn} = Connection.fetch(conn)
+
     AMQP.Connection.close(raw_conn)
+
     assert_receive {:disconnected, {:shutdown, :normal}}
     assert_receive {:connected, %AMQP.Connection{}}
   end
