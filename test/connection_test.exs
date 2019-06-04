@@ -5,59 +5,59 @@ defmodule Rabbit.ConnectionTest do
 
   describe "start_link/1" do
     test "starts a connection" do
-      assert {:ok, conn} = Connection.start_link()
-      assert true = Connection.alive?(conn)
+      assert {:ok, connection} = Connection.start_link()
+      assert true = Connection.alive?(connection)
     end
 
     test "starts a connection with uri" do
-      assert {:ok, conn} = Connection.start_link(uri: "amqp://guest:guest@localhost")
-      assert true = Connection.alive?(conn)
+      assert {:ok, connection} = Connection.start_link(uri: "amqp://guest:guest@localhost")
+      assert true = Connection.alive?(connection)
     end
 
     test "starts a connection with name" do
-      assert {:ok, conn} = Connection.start_link([], name: :foo)
+      assert {:ok, connection} = Connection.start_link([], name: :foo)
       assert true = Connection.alive?(:foo)
     end
   end
 
   describe "stop/2" do
     test "stops connection" do
-      assert {:ok, conn} = Connection.start_link()
-      assert :ok = Connection.stop(conn)
-      refute Process.alive?(conn)
+      assert {:ok, connection} = Connection.start_link()
+      assert :ok = Connection.stop(connection)
+      refute Process.alive?(connection)
     end
 
     test "disconnects the amqp connection" do
-      assert {:ok, conn} = Connection.start_link()
+      assert {:ok, connection} = Connection.start_link()
 
-      state = GenServer.call(conn, :state)
+      state = GenServer.call(connection, :state)
 
       assert Process.alive?(state.connection.pid)
-      assert :ok = Connection.stop(conn)
+      assert :ok = Connection.stop(connection)
       refute Process.alive?(state.connection.pid)
     end
 
     test "publishes disconnect to subscribers" do
-      assert {:ok, conn} = Connection.start_link()
+      assert {:ok, connection} = Connection.start_link()
 
-      Connection.subscribe(conn)
+      Connection.subscribe(connection)
 
-      assert :ok = Connection.stop(conn)
+      assert :ok = Connection.stop(connection)
       assert_receive {:disconnected, :stopped}
     end
   end
 
   describe "subscribe/2" do
     test "subscribes to connection" do
-      assert {:ok, conn} = Connection.start_link()
+      assert {:ok, connection} = Connection.start_link()
 
-      state = GenServer.call(conn, :state)
+      state = GenServer.call(connection, :state)
 
       refute MapSet.member?(state.subscribers, self())
 
-      Connection.subscribe(conn)
+      Connection.subscribe(connection)
 
-      state = GenServer.call(conn, :state)
+      state = GenServer.call(connection, :state)
 
       assert MapSet.member?(state.subscribers, self())
     end
@@ -65,9 +65,9 @@ defmodule Rabbit.ConnectionTest do
 
   @tag capture_log: true
   test "will reconnect when connection stops" do
-    assert {:ok, conn} = Connection.start_link()
-    assert :ok = Connection.subscribe(conn)
-    assert {:ok, raw_conn} = Connection.fetch(conn)
+    assert {:ok, connection} = Connection.start_link()
+    assert :ok = Connection.subscribe(connection)
+    assert {:ok, raw_conn} = Connection.fetch(connection)
 
     AMQP.Connection.close(raw_conn)
 
@@ -76,37 +76,37 @@ defmodule Rabbit.ConnectionTest do
   end
 
   test "removes dead monitors" do
-    assert {:ok, conn} = Connection.start_link()
+    assert {:ok, connection} = Connection.start_link()
 
     task =
       Task.async(fn ->
         subscriber = self()
-        Connection.subscribe(conn, subscriber)
-        state = GenServer.call(conn, :state)
+        Connection.subscribe(connection, subscriber)
+        state = GenServer.call(connection, :state)
 
         assert :subscriber = Map.get(state.monitors, subscriber)
       end)
 
     Task.await(task)
-    state = GenServer.call(conn, :state)
+    state = GenServer.call(connection, :state)
 
     refute Map.has_key?(state.monitors, task.pid)
   end
 
   test "removes dead subscribers" do
-    assert {:ok, conn} = Connection.start_link()
+    assert {:ok, connection} = Connection.start_link()
 
     task =
       Task.async(fn ->
         subscriber = self()
-        Connection.subscribe(conn, subscriber)
-        state = GenServer.call(conn, :state)
+        Connection.subscribe(connection, subscriber)
+        state = GenServer.call(connection, :state)
 
         assert MapSet.member?(state.subscribers, subscriber)
       end)
 
     Task.await(task)
-    state = GenServer.call(conn, :state)
+    state = GenServer.call(connection, :state)
 
     refute MapSet.member?(state.subscribers, task.pid)
   end

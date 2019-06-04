@@ -26,14 +26,15 @@ defmodule Rabbit.ConsumerTest do
   end
 
   setup do
-    {:ok, conn} = Connection.start_link()
-    {:ok, pro} = Producer.start_link(conn)
-    %{conn: conn, pro: pro}
+    {:ok, connection} = Connection.start_link()
+    {:ok, producer} = Producer.start_link(connection)
+    %{connection: connection, producer: producer}
   end
 
   describe "start_link/1" do
     test "starts consumer", meta do
-      assert {:ok, _con} = Consumer.start_link(meta.conn, module: ConsumerOne, queue: "consumer")
+      assert {:ok, _con} =
+               Consumer.start_link(meta.connection, module: ConsumerOne, queue: "consumer")
     end
   end
 
@@ -62,9 +63,9 @@ defmodule Rabbit.ConsumerTest do
   test "will reconnect when connection stops", meta do
     assert {:ok, consumer, _queue} = start_consumer(meta)
 
-    conn_state = GenServer.call(meta.conn, :state)
+    connection_state = GenServer.call(meta.connection, :state)
     consumer_state1 = GenServer.call(consumer, :state)
-    AMQP.Connection.close(conn_state.connection)
+    AMQP.Connection.close(connection_state.connection)
     await_consuming(consumer)
     consumer_state2 = GenServer.call(consumer, :state)
 
@@ -107,7 +108,7 @@ defmodule Rabbit.ConsumerTest do
       def handle_error(_msg), do: :ok
     end
 
-    assert {:ok, consumer} = ConsumerTwo.start_link(meta.conn, queue: queue_name())
+    assert {:ok, consumer} = ConsumerTwo.start_link(meta.connection, queue: queue_name())
     assert true = Process.alive?(consumer)
     assert :ok = await_consuming(consumer)
   end
@@ -133,7 +134,7 @@ defmodule Rabbit.ConsumerTest do
       def handle_error(_msg), do: :ok
     end
 
-    assert {:ok, consumer} = ConsumerThree.start_link(meta.conn)
+    assert {:ok, consumer} = ConsumerThree.start_link(meta.connection)
     assert true = Process.alive?(consumer)
     assert :ok = await_consuming(consumer)
 
@@ -145,7 +146,7 @@ defmodule Rabbit.ConsumerTest do
   defp start_consumer(meta, opts \\ []) do
     queue = queue_name()
     opts = [module: ConsumerOne, queue: queue] ++ opts
-    {:ok, consumer} = Consumer.start_link(meta.conn, opts)
+    {:ok, consumer} = Consumer.start_link(meta.connection, opts)
     await_consuming(consumer)
     {:ok, consumer, queue}
   end
@@ -154,7 +155,7 @@ defmodule Rabbit.ConsumerTest do
     signature = make_ref()
     message = {self(), signature}
     encoded_message = message |> :erlang.term_to_binary() |> Base.encode64()
-    Producer.publish(meta.pro, "", queue, encoded_message, opts)
+    Producer.publish(meta.producer, "", queue, encoded_message, opts)
     signature
   end
 
