@@ -108,11 +108,6 @@ defmodule Rabbit.Connection.Server do
     {:reply, result, state}
   end
 
-  def handle_call(:async_fetch, {pid, _ref}, state) do
-    async_fetch(state, pid)
-    {:reply, :ok, state}
-  end
-
   def handle_call(:alive?, _from, state) do
     result = alive?(state)
     {:reply, result, state}
@@ -187,9 +182,6 @@ defmodule Rabbit.Connection.Server do
   defp fetch(%{connection: nil}), do: {:error, :no_connection}
   defp fetch(state), do: {:ok, state.connection}
 
-  defp async_fetch(%{connection: nil}, _pid), do: :ok
-  defp async_fetch(state, pid), do: publish_connected([pid], state.connection)
-
   defp alive?(%{connection: nil}), do: false
   defp alive?(_state), do: true
 
@@ -236,8 +228,14 @@ defmodule Rabbit.Connection.Server do
     end
   end
 
+  defp subscribe(%{connection: nil} = state, subscriber) do
+    state = monitor(state, subscriber, :subscriber)
+    %{state | subscribers: MapSet.put(state.subscribers, subscriber)}
+  end
+
   defp subscribe(state, subscriber) do
     state = monitor(state, subscriber, :subscriber)
+    publish_connected([subscriber], state.connection)
     %{state | subscribers: MapSet.put(state.subscribers, subscriber)}
   end
 

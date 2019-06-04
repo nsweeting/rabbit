@@ -27,7 +27,7 @@ defmodule Rabbit.ConsumerTest do
 
   setup do
     {:ok, conn} = Connection.start_link()
-    {:ok, pro} = Producer.start_link(conn, async_connect: false)
+    {:ok, pro} = Producer.start_link(conn)
     %{conn: conn, pro: pro}
   end
 
@@ -112,9 +112,39 @@ defmodule Rabbit.ConsumerTest do
     assert :ok = await_consuming(consumer)
   end
 
+  test "consumer modules use init callback", meta do
+    defmodule ConsumerThree do
+      use Rabbit.Consumer
+
+      def init(opts) do
+        opts = Keyword.put(opts, :queue, "consumer_three")
+        {:ok, opts}
+      end
+
+      def after_connect(chan, queue) do
+        AMQP.Queue.declare(chan, queue, auto_delete: true)
+        AMQP.Queue.purge(chan, queue)
+
+        :ok
+      end
+
+      def handle_message(_msg), do: :ok
+
+      def handle_error(_msg), do: :ok
+    end
+
+    assert {:ok, consumer} = ConsumerThree.start_link(meta.conn)
+    assert true = Process.alive?(consumer)
+    assert :ok = await_consuming(consumer)
+
+    state = GenServer.call(consumer, :state)
+
+    assert state.queue == "consumer_three"
+  end
+
   defp start_consumer(meta, opts \\ []) do
     queue = queue_name()
-    opts = [module: ConsumerOne, queue: queue, async_connect: false] ++ opts
+    opts = [module: ConsumerOne, queue: queue] ++ opts
     {:ok, consumer} = Consumer.start_link(meta.conn, opts)
     await_consuming(consumer)
     {:ok, consumer, queue}

@@ -1,5 +1,51 @@
 defmodule Rabbit.Consumer do
-  @moduledoc false
+  @moduledoc """
+  A RabbitMQ consumer process.
+
+  This wraps around the standard `AMQP.Channel`. It provides the following benefits:
+
+  * Durability during connection and channel failures through use of expotential backoff.
+  * Channel pooling for increased publishing performance.
+  * Ability to create module-based consumers that permit easy runtime setup
+    through the `c:init/1` and `c:after_connect/2` callbacks.
+  * Automatic acknowledgements based on the return value of the `c:handle_message/1` callback.
+  * Ability to handle exception responses through the `c:handle_error/1` callback.
+  * Each message is executed within its own supervised task.
+
+  ## Example
+
+      defmodule MyConnection do
+        use Rabbit.Connection
+      end
+
+      defmodule MyConsumer do
+        use Rabbit.Consumer
+
+        def init(opts) do
+          # Perform any runtime configuration...
+          {:ok, opts}
+        end
+
+        def after_connect(channel, queue) do
+          # Perform any runtime exchange or queue setup...
+          AMQP.Queue.declare(channel, queue)
+
+          :ok
+        end
+
+        def handle_message(message) do
+          {:ack, message}
+        end
+
+        def handle_error(message) do
+          {:nack, message}
+        end
+      end
+
+      MyConnection.start_link()
+      MyConsumer.start_link(MyConnection, queue: "my_queue", prefetch_count: 20)
+
+  """
 
   alias Rabbit.Consumer
 
@@ -21,8 +67,18 @@ defmodule Rabbit.Consumer do
   @type result ::
           {action(), Rabbit.Message.t()} | {action(), Rabbit.Message.t(), action_options()}
 
-  @callback start_link(Rabbit.Connection.t(), options()) :: Supervisor.on_start()
+  @doc """
+  Starts a RabbitMQ consumer process.
 
+  ## Options
+    * `:uri` - The connection URI. This takes priority over other connection  attributes.
+
+  """
+  @callback start_link(Rabbit.Connection.t(), options()) :: GenServer.on_start()
+
+  @doc """
+  Stops a RabbitMQ consumer process.
+  """
   @callback stop() :: :ok
 
   @callback init(options()) :: {:ok, options()} | :ignore
@@ -47,6 +103,7 @@ defmodule Rabbit.Consumer do
     }
   end
 
+  @doc false
   @spec start_link(Rabbit.Connection.t(), options(), GenServer.options()) :: Supervisor.on_start()
   def start_link(connection, opts \\ [], server_opts \\ []) do
     Consumer.Server.start_link(connection, opts, server_opts)

@@ -10,7 +10,6 @@ defmodule Rabbit.Consumer.Server do
   @opts_schema %{
     module: [custom: [{__MODULE__, :validate}], required: true],
     queue: [type: :binary, required: true],
-    async_connect: [type: :boolean, default: true],
     prefetch_count: [type: :integer, default: 1],
     prefetch_size: [type: :integer, default: 0],
     consumer_tag: [type: :binary, default: ""],
@@ -71,20 +70,13 @@ defmodule Rabbit.Consumer.Server do
   @impl GenServer
   def handle_continue(:connection, state) do
     case connection(state) do
-      :ok ->
-        {:noreply, state}
-
-      :error ->
-        {:noreply, state, {:continue, :restart_delay}}
-
-      {:ok, connection} ->
-        {:noreply, state, {:continue, {:channel, connection}}}
+      {:ok, state} -> {:noreply, state}
+      {:error, state} -> {:noreply, state, {:continue, :restart_delay}}
     end
   end
 
-  def handle_continue({:channel, connection}, state) do
-    case channel(state, connection) do
-      :ok -> {:noreply, state}
+  def handle_continue(:channel, state) do
+    case channel(state) do
       {:ok, state} -> {:noreply, state, {:continue, :after_connect}}
       {:error, state} -> {:noreply, state, {:continue, :restart_delay}}
     end
@@ -118,7 +110,8 @@ defmodule Rabbit.Consumer.Server do
   @doc false
   @impl GenServer
   def handle_info({:connected, connection}, state) do
-    {:noreply, state, {:continue, {:channel, connection}}}
+    state = connected(state, connection)
+    {:noreply, state, {:continue, :channel}}
   end
 
   def handle_info({:disconnected, reason}, state) do
@@ -189,7 +182,6 @@ defmodule Rabbit.Consumer.Server do
     %{
       name: process_name(self()),
       module: Keyword.get(opts, :module),
-      async_connect: Keyword.get(opts, :async_connect),
       connection: connection,
       channel: nil,
       consuming: false,
@@ -202,33 +194,25 @@ defmodule Rabbit.Consumer.Server do
     }
   end
 
-  defp connection(%{async_connect: false} = state) do
-    case Rabbit.Connection.fetch(state.connection) do
-      {:ok, _} = result ->
-        Rabbit.Connection.subscribe(state.connection, self())
-        result
-
-      _ ->
-        raise RuntimeError, "synchronous connection failed"
-    end
-  end
-
   defp connection(state) do
     Rabbit.Connection.subscribe(state.connection, self())
-    Rabbit.Connection.async_fetch(state.connection)
-    :ok
+    {:ok, state}
   rescue
     error ->
       log_error(state, error)
-      :error
+      {:error, state}
   catch
     msg, reason ->
       log_error(state, {msg, reason})
-      :error
+      {:error, state}
   end
 
-  defp channel(%{channel: nil} = state, connection) do
-    case AMQP.Channel.open(connection) do
+  defp connected(state, connection) do
+    %{state | connection: connection}
+  end
+
+  defp channel(%{channel: nil} = state) do
+    case AMQP.Channel.open(state.connection) do
       {:ok, channel} ->
         Process.monitor(channel.pid)
         state = %{state | channel: channel}
@@ -240,8 +224,8 @@ defmodule Rabbit.Consumer.Server do
     end
   end
 
-  defp channel(_state, _connection) do
-    :ok
+  defp channel(state) do
+    {:ok, state}
   end
 
   defp after_connect(state) do

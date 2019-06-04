@@ -39,7 +39,9 @@ defmodule Rabbit.ConnectionTest do
 
     test "publishes disconnect to subscribers" do
       assert {:ok, conn} = Connection.start_link()
-      assert :ok = Connection.subscribe(conn)
+
+      Connection.subscribe(conn)
+
       assert :ok = Connection.stop(conn)
       assert_receive {:disconnected, :stopped}
     end
@@ -52,7 +54,8 @@ defmodule Rabbit.ConnectionTest do
       state = GenServer.call(conn, :state)
 
       refute MapSet.member?(state.subscribers, self())
-      assert :ok = Connection.subscribe(conn)
+
+      Connection.subscribe(conn)
 
       state = GenServer.call(conn, :state)
 

@@ -1,5 +1,37 @@
 defmodule Rabbit.Producer do
-  @moduledoc false
+  @moduledoc """
+  A RabbitMQ producer process.
+
+  This wraps around the standard `AMQP.Channel`. It provides the following benefits:
+
+  * Durability during connection and channel failures through use of expotential backoff.
+  * Channel pooling for increased publishing performance.
+  * Ability to create module-based producers that permit easy runtime setup
+    through an `c:init/1` callback.
+  * Simplification of standard publishing options.
+  * Automatic payload serialization based on available serializers and payload
+    content type.
+
+  ## Example
+
+      defmodule MyConnection do
+        use Rabbit.Connection
+      end
+
+      defmodule MyProducer do
+        use Rabbit.Producer
+
+        def init(opts) do
+          # Perform any runtime configuration...
+          {:ok, opts}
+        end
+      end
+
+      MyConnection.start_link()
+      MyProducer.start_link(MyConnection, publish_opts: [content_type: "application/json"])
+      MyProducer.publish("my_exchange", "my_queue", %{foo: "bar"})
+
+  """
 
   alias Rabbit.Producer
 
@@ -7,7 +39,6 @@ defmodule Rabbit.Producer do
   @type start_option ::
           {:pool_size, non_neg_integer()}
           | {:max_overflow, non_neg_integer()}
-          | {:sync_connect, boolean()}
           | {:publish_opts, publish_options()}
   @type start_options :: [start_option()]
   @type exchange :: String.t()
@@ -31,8 +62,18 @@ defmodule Rabbit.Producer do
           | {:app_id, String.t()}
   @type publish_options :: [publish_option()]
 
+  @doc """
+  Starts a RabbitMQ producer process.
+
+  ## Options
+    * `:immediate` - tocome..
+
+  """
   @callback start_link(Rabbit.Connection.t(), start_options()) :: Supervisor.on_start()
 
+  @doc """
+  Stops a RabbitMQ producer process.
+  """
   @callback stop() :: :ok
 
   @callback init(start_options()) :: {:ok, start_options()} | :ignore
@@ -55,12 +96,14 @@ defmodule Rabbit.Producer do
     }
   end
 
+  @doc false
   @spec start_link(Rabbit.Connection.t(), start_options(), GenServer.options()) ::
           Supervisor.on_start()
   def start_link(connection, opts \\ [], server_opts \\ []) do
     Producer.Pool.start_link(connection, opts, server_opts)
   end
 
+  @doc false
   @spec stop(Rabbit.Producer.t()) :: :ok
   def stop(producer) do
     for {_, worker, _, _} <- GenServer.call(producer, :get_all_workers) do
@@ -70,6 +113,7 @@ defmodule Rabbit.Producer do
     :poolboy.stop(producer)
   end
 
+  @doc false
   @spec publish(
           Rabbit.Producer.t(),
           exchange(),

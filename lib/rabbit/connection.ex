@@ -1,5 +1,40 @@
 defmodule Rabbit.Connection do
-  @moduledoc false
+  @moduledoc """
+  A RabbitMQ connection process.
+
+  This wraps around the standard `AMQP.Connection`. It provides the following
+  benefits:
+
+  * Durability during connection failures through use of expotential backoff.
+  * Subscriptions that assist connection status monitoring.
+  * Ability to create module-based connections that permit easy runtime setup
+    through an `c:init/1` callback.
+
+  ## Example
+
+      defmodule MyConnection do
+        use Rabbit.Connection
+
+        def init(opts) do
+          opts = Keyword.put(opts, :uri, System.get_env("RABBIT_URI"))
+          {:ok, opts}
+        end
+      end
+
+      MyConnection.start_link()
+      MyConnection.subscribe()
+
+      receive do
+        {:connected, connection} -> # Do stuff with AMQP.Connection
+      end
+
+      MyConnection.stop()
+
+      receive do
+        {:disconnected, reason} -> # Do stuff with disconnect
+      end
+
+  """
 
   alias Rabbit.Connection
 
@@ -19,21 +54,69 @@ defmodule Rabbit.Connection do
           | {:connection_timeout, integer()}
           | {:ssl_options, atom() | Keyword.t()}
           | {:socket_options, Keyword.t()}
+          | {:retry_backoff, non_neg_integer()}
+          | {:retry_max_delay, non_neg_integer()}
   @type options :: uri() | [option()]
 
+  @doc """
+  Starts a RabbitMQ connection process.
+
+  ## Options
+    * `:uri` - The connection URI. This takes priority over other connection  attributes.
+    * `:username` - The name of a user registered with the broker - defaults to `"guest"`.
+    * `:password` - The password of user - defaults to `"guest\`.
+    * `:virtual_host` - The name of a virtual host in the broker - defaults to `"/"`.
+    * `:host` - The hostname of the broker - defaults to `"localhost"`.
+    * `:port` - The port the broker is listening on - defaults to `5672`.
+    * `:channel_max` - The channel_max handshake parameter - defaults to `0`.
+    * `:frame_max` - The frame_max handshake parameter  - defaults to `0`.
+    * `:heartbeat` - The hearbeat interval in seconds - defaults to `10`.
+    * `:connection_timeout` - The connection timeout in milliseconds - defaults to `50000`.
+    * `:ssl_options` - Enable SSL by setting the location to cert files - defaults to `:none`.
+    * `:client_properties` - A list of extra client properties to be sent to the server - defaults to `[]`.
+    * `:socket_options` - Extra socket options. These are appended to the default options. \
+      See http://www.erlang.org/doc/man/inet.html#setopts-2 and http://www.erlang.org/doc/man/gen_tcp.html#connect-4 \
+      for descriptions of the available options.
+
+  """
   @callback start_link(options()) :: GenServer.on_start()
 
+  @doc """
+  Stops a RabbitMQ connection process.
+  """
   @callback stop() :: :ok | {:error, any()}
 
   @callback init(options()) :: {:ok, options()} | :ignore
 
+  @doc """
+  Fetches the raw `AMQP.Connection` struct from the process.
+  """
   @callback fetch() :: {:ok, Rabbit.Connection.t()} | {:error, :not_connected}
 
-  @callback async_fetch() :: :ok
-
+  @doc """
+  Checks whether a connection is alive.
+  """
   @callback alive?() :: boolean()
 
-  @callback subscribe(pid() | nil) :: :ok
+  @doc """
+  Subscribes a process to the RabbitMQ connection.
+
+  A subscribed process can receive the following messages:
+
+  `{:connected, connection}` - where connection is an `AMQP.Connection` struct.
+
+  During the subscription process, if the connection is alive, this message will
+  immediately be sent. If the connection goes down, and manages to reconnect, this
+  message will be sent.
+
+  `{:disconnected, reason}` - where reason can be any value.
+
+  If the connection goes down, all subscribing processes are sent this message.
+  The connection process will then go through an exponential backoff period until
+  connection is achieved again.
+
+  """
+  @callback subscribe(subscriber :: pid() | nil) :: :ok
 
   @optional_callbacks init: 1
 
@@ -68,13 +151,7 @@ defmodule Rabbit.Connection do
   end
 
   @doc false
-  @spec async_fetch(Rabbit.Connection.t()) :: :ok
-  def async_fetch(connection) do
-    GenServer.call(connection, :async_fetch)
-  end
-
-  @doc false
-  @spec alive?(Rabbit.Connection.t()) :: :ok
+  @spec alive?(Rabbit.Connection.t()) :: boolean()
   def alive?(connection) do
     GenServer.call(connection, :alive?)
   end
@@ -113,11 +190,6 @@ defmodule Rabbit.Connection do
       @impl Rabbit.Connection
       def fetch do
         Connection.fetch(__MODULE__)
-      end
-
-      @impl Rabbit.Connection
-      def async_fetch do
-        Connection.async_fetch(__MODULE__)
       end
 
       @impl Rabbit.Connection

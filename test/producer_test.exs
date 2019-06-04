@@ -28,7 +28,7 @@ defmodule Rabbit.ProducerTest do
 
     test "disconnects the amqp channel" do
       assert {:ok, conn} = Connection.start_link()
-      assert {:ok, pro} = Producer.start_link(conn, async_connect: false)
+      assert {:ok, pro} = Producer.start_link(conn)
 
       [worker] = GenServer.call(pro, :get_avail_workers)
       state = GenServer.call(worker, :state)
@@ -48,7 +48,7 @@ defmodule Rabbit.ProducerTest do
       AMQP.Queue.purge(amqp_chan, "foo")
 
       assert {:ok, conn} = Connection.start_link()
-      assert {:ok, pro} = Producer.start_link(conn, async_connect: false)
+      assert {:ok, pro} = Producer.start_link(conn)
       assert :ok = Producer.publish(pro, "", "foo", "bar")
 
       :timer.sleep(50)
@@ -85,7 +85,7 @@ defmodule Rabbit.ProducerTest do
     AMQP.Queue.purge(amqp_chan, "producer")
 
     assert {:ok, conn} = Connection.start_link()
-    assert {:ok, pro} = ProOne.start_link(conn, async_connect: false)
+    assert {:ok, pro} = ProOne.start_link(conn)
     assert :ok = ProOne.publish("", "producer", "bar")
   end
 

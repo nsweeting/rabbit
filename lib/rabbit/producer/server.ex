@@ -10,8 +10,7 @@ defmodule Rabbit.Producer.Server do
   @opts_schema %{
     module: [type: :module, required: false],
     connection: [type: [:atom, :tuple, :pid], required: true],
-    publish_opts: [type: :list, default: []],
-    async_connect: [type: :boolean, default: true]
+    publish_opts: [type: :list, default: []]
   }
 
   ################################
@@ -41,14 +40,8 @@ defmodule Rabbit.Producer.Server do
   @impl GenServer
   def handle_continue(:connection, state) do
     case connection(state) do
-      :ok ->
-        {:noreply, state}
-
-      :error ->
-        {:noreply, state, {:continue, :restart_delay}}
-
-      {:ok, connection} ->
-        {:noreply, state, {:continue, {:channel, connection}}}
+      {:ok, state} -> {:noreply, state}
+      {:error, state} -> {:noreply, state, {:continue, :restart_delay}}
     end
   end
 
@@ -76,7 +69,7 @@ defmodule Rabbit.Producer.Server do
   end
 
   def handle_call({:publish, message}, _from, state) do
-    result = perform_publish(state, message)
+    result = publish(state, message)
     {:reply, result, state}
   end
 
@@ -124,35 +117,22 @@ defmodule Rabbit.Producer.Server do
       name: process_name(self()),
       connection: Keyword.get(opts, :connection),
       publish_opts: Keyword.get(opts, :publish_opts),
-      async_connect: Keyword.get(opts, :async_connect),
       channel: nil,
       restart_attempts: 0
     }
   end
 
-  defp connection(%{async_connect: false} = state) do
-    case Rabbit.Connection.fetch(state.connection) do
-      {:ok, _} = result ->
-        Rabbit.Connection.subscribe(state.connection, self())
-        result
-
-      _ ->
-        raise RuntimeError, "synchronous connection failed"
-    end
-  end
-
   defp connection(state) do
     Rabbit.Connection.subscribe(state.connection, self())
-    Rabbit.Connection.async_fetch(state.connection)
-    :ok
+    {:ok, state}
   rescue
     error ->
       log_error(state, error)
-      :error
+      {:error, state}
   catch
     msg, reason ->
       log_error(state, {msg, reason})
-      :error
+      {:error, state}
   end
 
   defp channel(%{channel: nil} = state, connection) do
@@ -205,11 +185,11 @@ defmodule Rabbit.Producer.Server do
     1000 * attempt
   end
 
-  defp perform_publish(%{channel: nil}, _msg) do
+  defp publish(%{channel: nil}, _msg) do
     {:error, :not_connected}
   end
 
-  defp perform_publish(state, {exchange, routing_key, payload, opts}) do
+  defp publish(state, {exchange, routing_key, payload, opts}) do
     opts = Keyword.merge(state.publish_opts, opts)
 
     with {:ok, payload} <- encode_payload(payload, opts) do
