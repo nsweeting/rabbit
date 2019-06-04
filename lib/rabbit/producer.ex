@@ -9,17 +9,21 @@ defmodule Rabbit.Producer do
   * Ability to create module-based producers that permit easy runtime setup
     through an `c:init/1` callback.
   * Simplification of standard publishing options.
-  * Automatic payload serialization based on available serializers and payload
+  * Automatic payload encoding based on available serializers and message
     content type.
 
   ## Example
 
+      # This is a connection
       defmodule MyConnection do
         use Rabbit.Connection
       end
 
+      # This is a producer
       defmodule MyProducer do
         use Rabbit.Producer
+
+        # Callbacks
 
         def init(opts) do
           # Perform any runtime configuration...
@@ -27,10 +31,22 @@ defmodule Rabbit.Producer do
         end
       end
 
+      # Start the connection
       MyConnection.start_link()
+
+      # Start the producer
       MyProducer.start_link(MyConnection, publish_opts: [content_type: "application/json"])
+
+      # Publish a message
       MyProducer.publish("my_exchange", "my_queue", %{foo: "bar"})
 
+  ## Serializers
+
+  When a message is published, its content type is compared to the list of available
+  serializers. If a serializer matches the content type, the message will be
+  automatically encoded.
+
+  You can find out more about serializers at `Rabbit.Serializer`.
   """
 
   alias Rabbit.Producer

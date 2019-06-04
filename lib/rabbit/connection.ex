@@ -12,22 +12,30 @@ defmodule Rabbit.Connection do
 
   ## Example
 
+      # This is a connection
       defmodule MyConnection do
         use Rabbit.Connection
 
+        # Callbacks
+
+        # Perform any runtime configuration
         def init(opts) do
           opts = Keyword.put(opts, :uri, System.get_env("RABBIT_URI"))
           {:ok, opts}
         end
       end
 
+      # Start the connection
       MyConnection.start_link()
+
+      # Subscribe to the connection
       MyConnection.subscribe()
 
       receive do
         {:connected, connection} -> # Do stuff with AMQP.Connection
       end
 
+      # Stop the connection
       MyConnection.stop()
 
       receive do
