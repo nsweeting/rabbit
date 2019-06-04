@@ -37,13 +37,13 @@ defmodule Rabbit.Worker.Executer do
     opts = KeywordValidator.validate!(opts, @opts_schema)
     state = init_state(message, opts)
     set_timeout(state.timeout)
-    {:ok, state, {:continue, :execute}}
+    {:ok, state, {:continue, :run}}
   end
 
   @doc false
   @impl GenServer
-  def handle_continue(:execute, state) do
-    state = execute(state)
+  def handle_continue(:run, state) do
+    state = run(state)
     {:noreply, state, state.timeout}
   end
 
@@ -83,7 +83,7 @@ defmodule Rabbit.Worker.Executer do
     Process.send_after(self(), :timeout, timeout)
   end
 
-  defp execute(state) do
+  defp run(state) do
     parent = self()
     ref = make_ref()
 

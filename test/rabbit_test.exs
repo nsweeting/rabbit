@@ -1,2 +1,0 @@
-defmodule RabbitTest do
-end

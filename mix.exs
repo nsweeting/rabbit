@@ -1,13 +1,19 @@
 defmodule Rabbit.MixProject do
   use Mix.Project
 
+  @version "0.1.0"
+
   def project do
     [
       app: :rabbit,
-      version: "0.1.0",
+      version: @version,
       elixir: "~> 1.7",
       start_permanent: Mix.env() == :prod,
-      deps: deps()
+      deps: deps(),
+      description: description(),
+      package: package(),
+      name: "Rabbit",
+      docs: docs()
     ]
   end
 
@@ -16,6 +22,29 @@ defmodule Rabbit.MixProject do
     [
       extra_applications: [:lager, :logger],
       mod: {Rabbit.Application, []}
+    ]
+  end
+
+  defp description do
+    """
+    A set of tools for building applications with RabbitMQ.
+    """
+  end
+
+  defp package do
+    [
+      files: ["lib", "mix.exs", "README*"],
+      maintainers: ["Nicholas Sweeting"],
+      licenses: ["MIT"],
+      links: %{"GitHub" => "https://github.com/nsweeting/rabbit"}
+    ]
+  end
+
+  defp docs do
+    [
+      extras: ["README.md"],
+      main: "readme",
+      source_url: "https://github.com/nsweeting/rabbit"
     ]
   end
 

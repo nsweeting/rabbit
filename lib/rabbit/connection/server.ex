@@ -179,7 +179,7 @@ defmodule Rabbit.Connection.Server do
     %{state | connection: nil}
   end
 
-  defp fetch(%{connection: nil}), do: {:error, :no_connection}
+  defp fetch(%{connection: nil}), do: {:error, :not_connected}
   defp fetch(state), do: {:ok, state.connection}
 
   defp alive?(%{connection: nil}), do: false

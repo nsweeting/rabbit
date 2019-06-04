@@ -153,7 +153,7 @@ defmodule Rabbit.Connection do
   end
 
   @doc false
-  @spec fetch(Rabbit.Connection.t()) :: {:ok, AMQP.Connection.t()} | {:error, :no_connection}
+  @spec fetch(Rabbit.Connection.t()) :: {:ok, AMQP.Connection.t()} | {:error, :not_connected}
   def fetch(connection) do
     GenServer.call(connection, :fetch)
   end
