@@ -1,7 +1,7 @@
 defmodule Rabbit.ConsumerSupervisorTest do
   use ExUnit.Case
 
-  alias Rabbit.{Connection, ConsumerSupervisor, Producer}
+  alias Rabbit.Connection
 
   defmodule ConsumersOne do
     use Rabbit.ConsumerSupervisor
@@ -38,8 +38,7 @@ defmodule Rabbit.ConsumerSupervisorTest do
 
   setup do
     {:ok, connection} = Connection.start_link()
-    {:ok, producer} = Producer.start_link(connection)
-    %{connection: connection, producer: producer}
+    %{connection: connection}
   end
 
   describe "start_link/2" do
