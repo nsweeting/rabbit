@@ -12,7 +12,7 @@ The package can be installed by adding `rabbit` to your list of dependencies in 
 ```elixir
 def deps do
   [
-    {:rabbit, "~> 0.1"}
+    {:rabbit, "~> 0.2"}
   ]
 end
 ```
