@@ -165,7 +165,7 @@ defmodule Rabbit.Consumer.Server do
   end
 
   ################################
-  # Private Helpers
+  # Private API
   ################################
 
   defp consumer_init(opts) do
@@ -300,11 +300,15 @@ defmodule Rabbit.Consumer.Server do
     if Code.ensure_loaded?(module) and
          module.module_info[:attributes]
          |> Keyword.get(:behaviour, [])
-         |> Enum.member?(Rabbit.Consumer) do
+         |> is_consumer() do
       []
     else
-      ["must be a Rabbit.Consumer module"]
+      ["must be a Rabbit.Consumer or Rabbit.ConsumerSupervisor module"]
     end
+  end
+
+  defp is_consumer(behaviour) do
+    Enum.member?(behaviour, Rabbit.Consumer) || Enum.member?(behaviour, Rabbit.ConsumerSupervisor)
   end
 
   defp log_error(state, error) do

@@ -3,7 +3,7 @@ defmodule Rabbit.ConnectionTest do
 
   alias Rabbit.Connection
 
-  describe "start_link/1" do
+  describe "start_link/2" do
     test "starts a connection" do
       assert {:ok, connection} = Connection.start_link()
       assert true = Connection.alive?(connection)
@@ -20,7 +20,7 @@ defmodule Rabbit.ConnectionTest do
     end
   end
 
-  describe "stop/2" do
+  describe "stop/1" do
     test "stops connection" do
       assert {:ok, connection} = Connection.start_link()
       assert :ok = Connection.stop(connection)

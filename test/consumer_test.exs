@@ -31,14 +31,14 @@ defmodule Rabbit.ConsumerTest do
     %{connection: connection, producer: producer}
   end
 
-  describe "start_link/1" do
+  describe "start_link/3" do
     test "starts consumer", meta do
       assert {:ok, _con} =
                Consumer.start_link(meta.connection, module: ConsumerOne, queue: "consumer")
     end
   end
 
-  describe "stop/2" do
+  describe "stop/1" do
     test "stops consumer", meta do
       assert {:ok, consumer, _queue} = start_consumer(meta)
       assert :ok = Consumer.stop(consumer)

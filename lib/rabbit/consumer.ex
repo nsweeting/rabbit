@@ -82,7 +82,7 @@ defmodule Rabbit.Consumer do
   @type action_options :: [{:multiple, boolean()} | {:requeue, boolean()}]
 
   @doc """
-  Starts a RabbitMQ consumer process.
+  Starts a consumer process.
 
   ## Options
     * `:queue` - The queue to consume messages from.
@@ -105,7 +105,7 @@ defmodule Rabbit.Consumer do
   @callback start_link(connection :: Rabbit.Connection.t(), options()) :: GenServer.on_start()
 
   @doc """
-  Stops a RabbitMQ consumer process.
+  Stops a consumer process.
   """
   @callback stop() :: :ok
 

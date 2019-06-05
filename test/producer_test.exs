@@ -3,7 +3,7 @@ defmodule Rabbit.ProducerTest do
 
   alias Rabbit.{Connection, Producer}
 
-  describe "start_link/1" do
+  describe "start_link/3" do
     test "starts producer" do
       assert {:ok, connection} = Connection.start_link()
       assert {:ok, _producer} = Producer.start_link(connection)
@@ -18,7 +18,7 @@ defmodule Rabbit.ProducerTest do
     end
   end
 
-  describe "stop/2" do
+  describe "stop/1" do
     test "stops producer" do
       assert {:ok, connection} = Connection.start_link()
       assert {:ok, producer} = Producer.start_link(connection)
