@@ -33,6 +33,9 @@ defmodule MyConnection do
 
   # Perform runtime config
   def init(opts) do
+    uri = System.get_env("RABBITMQ_URI") || "amqp://guest:guest@127.0.0.1:5672"
+    opts = Keyword.put(opts, :uri, uri)
+
     {:ok, opts}
   end
 end

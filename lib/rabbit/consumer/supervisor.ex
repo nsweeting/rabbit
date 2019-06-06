@@ -33,7 +33,7 @@ defmodule Rabbit.Consumer.Supervisor do
   end
 
   defp build_children(connection, module, [consumer | consumers], children) do
-    id = Enum.count(children) |> to_string() |> String.to_atom()
+    id = children |> Enum.count() |> to_string() |> String.to_atom()
     opts = Keyword.put(consumer, :module, module)
     spec = {Rabbit.Consumer, [connection, opts]}
     children = children ++ [Supervisor.child_spec(spec, id: id)]
