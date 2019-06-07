@@ -4,6 +4,7 @@ defmodule Rabbit.Config do
   use GenServer
 
   @table __MODULE__
+  @app_env Application.get_all_env(:rabbit)
 
   ################################
   # Public API
@@ -56,6 +57,7 @@ defmodule Rabbit.Config do
   ################################
 
   defp init_opts(opts) do
+    opts = Keyword.merge(@app_env, opts)
     KeywordValidator.validate!(opts, opts_schema())
   end
 
