@@ -8,7 +8,7 @@ defmodule Rabbit.Producer.Server do
   import Rabbit.Utilities
 
   @opts_schema %{
-    module: [type: :module, required: false],
+    connection: [type: [:tuple, :pid, :atom], required: true],
     publish_opts: [type: :list, default: []]
   }
 
@@ -18,13 +18,13 @@ defmodule Rabbit.Producer.Server do
 
   @doc false
   def start_link(opts) when is_list(opts) do
-    {connection, opts} = Keyword.pop(opts, :connection)
-    start_link(connection, opts)
+    {module, opts} = Keyword.pop(opts, :module)
+    start_link(module, opts)
   end
 
   @doc false
-  def start_link(connection, opts \\ [], server_opts \\ []) do
-    GenServer.start_link(__MODULE__, {connection, opts}, server_opts)
+  def start_link(module, opts \\ [], server_opts \\ []) do
+    GenServer.start_link(__MODULE__, {module, opts}, server_opts)
   end
 
   ################################
@@ -33,10 +33,10 @@ defmodule Rabbit.Producer.Server do
 
   @doc false
   @impl GenServer
-  def init({connection, opts}) do
-    with {:ok, opts} <- producer_init(opts) do
+  def init({module, opts}) do
+    with {:ok, opts} <- module.init(:producer, opts) do
       opts = KeywordValidator.validate!(opts, @opts_schema)
-      state = init_state(connection, opts)
+      state = init_state(opts)
       {:ok, state, {:continue, :connection}}
     end
   end
@@ -107,20 +107,10 @@ defmodule Rabbit.Producer.Server do
   # Private API
   ################################
 
-  defp producer_init(opts) do
-    module = Keyword.get(opts, :module)
-
-    if callback_exported?(module, :init, 1) do
-      module.init(opts)
-    else
-      {:ok, opts}
-    end
-  end
-
-  defp init_state(connection, opts) do
+  defp init_state(opts) do
     %{
       name: process_name(self()),
-      connection: connection,
+      connection: Keyword.get(opts, :connection),
       publish_opts: Keyword.get(opts, :publish_opts),
       channel: nil,
       restart_attempts: 0

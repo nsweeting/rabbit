@@ -30,7 +30,7 @@ defmodule Rabbit.Serializer do
 
   By default, Rabbit comes with serializers for the following content types:
 
-  * `"application/erlang"`
+  * `"application/etf"` - built in erlang term format.
   * `"application/json"` - requires the `Jason` library to be added.
 
   You can modify the default serializers through application config:
@@ -56,7 +56,7 @@ defmodule Rabbit.Serializer do
 
   @defaults %{
     "application/json" => Rabbit.Serializers.JSON,
-    "application/erlang-binary" => Rabbit.Serializers.ETF
+    "application/etf" => Rabbit.Serializers.ETF
   }
 
   @doc false

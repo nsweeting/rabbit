@@ -8,7 +8,7 @@ defmodule Rabbit.Consumer.Server do
   require Logger
 
   @opts_schema %{
-    module: [custom: [{__MODULE__, :validate}], required: true],
+    connection: [type: [:tuple, :pid, :atom], required: true],
     queue: [type: :binary, required: true],
     prefetch_count: [type: :integer, default: 1],
     prefetch_size: [type: :integer, default: 0],
@@ -43,13 +43,8 @@ defmodule Rabbit.Consumer.Server do
   ################################
 
   @doc false
-  def start_link(connection, opts \\ [], server_opts \\ []) do
-    GenServer.start_link(__MODULE__, {connection, opts}, server_opts)
-  end
-
-  @doc false
-  def validate(:module, module) do
-    validate_consumer(module)
+  def start_link(module, opts \\ [], server_opts \\ []) do
+    GenServer.start_link(__MODULE__, {module, opts}, server_opts)
   end
 
   ################################
@@ -58,10 +53,10 @@ defmodule Rabbit.Consumer.Server do
 
   @doc false
   @impl GenServer
-  def init({connection, opts}) do
-    with {:ok, opts} <- consumer_init(opts) do
+  def init({module, opts}) do
+    with {:ok, opts} <- module.init(:consumer, opts) do
       opts = KeywordValidator.validate!(opts, @opts_schema)
-      state = init_state(connection, opts)
+      state = init_state(module, opts)
       {:ok, state, {:continue, :connection}}
     end
   end
@@ -75,15 +70,15 @@ defmodule Rabbit.Consumer.Server do
     end
   end
 
-  def handle_continue(:channel, state) do
-    case channel(state) do
-      {:ok, state} -> {:noreply, state, {:continue, :after_connect}}
+  def handle_continue({:channel, connection}, state) do
+    case channel(state, connection) do
+      {:ok, state} -> {:noreply, state, {:continue, :setup}}
       {:error, state} -> {:noreply, state, {:continue, :restart_delay}}
     end
   end
 
-  def handle_continue(:after_connect, state) do
-    case after_connect(state) do
+  def handle_continue(:setup, state) do
+    case handle_setup(state) do
       {:ok, state} -> {:noreply, state, {:continue, :consume}}
       {:error, state} -> {:noreply, state, {:continue, :restart_delay}}
     end
@@ -110,8 +105,7 @@ defmodule Rabbit.Consumer.Server do
   @doc false
   @impl GenServer
   def handle_info({:connected, connection}, state) do
-    state = connected(state, connection)
-    {:noreply, state, {:continue, :channel}}
+    {:noreply, state, {:continue, {:channel, connection}}}
   end
 
   def handle_info({:disconnected, reason}, state) do
@@ -168,21 +162,11 @@ defmodule Rabbit.Consumer.Server do
   # Private API
   ################################
 
-  defp consumer_init(opts) do
-    module = Keyword.get(opts, :module)
-
-    if callback_exported?(module, :init, 1) do
-      module.init(opts)
-    else
-      {:ok, opts}
-    end
-  end
-
-  defp init_state(connection, opts) do
+  defp init_state(module, opts) do
     %{
       name: process_name(self()),
-      module: Keyword.get(opts, :module),
-      connection: connection,
+      module: module,
+      connection: Keyword.get(opts, :connection),
       channel: nil,
       consuming: false,
       consumer_tag: nil,
@@ -207,12 +191,8 @@ defmodule Rabbit.Consumer.Server do
       {:error, state}
   end
 
-  defp connected(state, connection) do
-    %{state | connection: connection}
-  end
-
-  defp channel(%{channel: nil} = state) do
-    case AMQP.Channel.open(state.connection) do
+  defp channel(%{channel: nil} = state, connection) do
+    case AMQP.Channel.open(connection) do
       {:ok, channel} ->
         Process.monitor(channel.pid)
         state = %{state | channel: channel}
@@ -224,22 +204,18 @@ defmodule Rabbit.Consumer.Server do
     end
   end
 
-  defp channel(state) do
+  defp channel(state, _connection) do
     {:ok, state}
   end
 
-  defp after_connect(state) do
-    if callback_exported?(state.module, :after_connect, 2) do
-      case state.module.after_connect(state.channel, state.queue) do
-        :ok ->
-          {:ok, state}
+  defp handle_setup(state) do
+    case state.module.handle_setup(state.channel, state.queue) do
+      :ok ->
+        {:ok, state}
 
-        error ->
-          log_error(state, error)
-          {:error, state}
-      end
-    else
-      {:ok, state}
+      error ->
+        log_error(state, error)
+        {:error, state}
     end
   end
 
@@ -294,21 +270,6 @@ defmodule Rabbit.Consumer.Server do
   defp handle_message(state, payload, meta) do
     message = Rabbit.Message.new(state.name, state.module, state.channel, payload, meta)
     Rabbit.Worker.start_child(message, state.worker_opts)
-  end
-
-  defp validate_consumer(module) do
-    if Code.ensure_loaded?(module) and
-         module.module_info[:attributes]
-         |> Keyword.get(:behaviour, [])
-         |> is_consumer() do
-      []
-    else
-      ["must be a Rabbit.Consumer or Rabbit.ConsumerSupervisor module"]
-    end
-  end
-
-  defp is_consumer(behaviour) do
-    Enum.member?(behaviour, Rabbit.Consumer) || Enum.member?(behaviour, Rabbit.ConsumerSupervisor)
   end
 
   defp log_error(state, error) do

@@ -3,32 +3,43 @@ defmodule Rabbit.ConnectionTest do
 
   alias Rabbit.Connection
 
+  defmodule TestConnection do
+    use Rabbit.Connection
+
+    @impl Rabbit.Connection
+    def init(:connection, opts) do
+      {:ok, opts}
+    end
+  end
+
   describe "start_link/2" do
     test "starts a connection" do
-      assert {:ok, connection} = Connection.start_link()
+      assert {:ok, connection} = Connection.start_link(TestConnection)
       assert true = Connection.alive?(connection)
     end
 
     test "starts a connection with uri" do
-      assert {:ok, connection} = Connection.start_link(uri: "amqp://guest:guest@localhost")
+      assert {:ok, connection} =
+               Connection.start_link(TestConnection, uri: "amqp://guest:guest@localhost")
+
       assert true = Connection.alive?(connection)
     end
 
     test "starts a connection with name" do
-      assert {:ok, connection} = Connection.start_link([], name: :foo)
+      assert {:ok, connection} = Connection.start_link(TestConnection, [], name: :foo)
       assert true = Connection.alive?(:foo)
     end
   end
 
   describe "stop/1" do
     test "stops connection" do
-      assert {:ok, connection} = Connection.start_link()
+      assert {:ok, connection} = Connection.start_link(TestConnection)
       assert :ok = Connection.stop(connection)
       refute Process.alive?(connection)
     end
 
     test "disconnects the amqp connection" do
-      assert {:ok, connection} = Connection.start_link()
+      assert {:ok, connection} = Connection.start_link(TestConnection)
 
       state = GenServer.call(connection, :state)
 
@@ -38,7 +49,7 @@ defmodule Rabbit.ConnectionTest do
     end
 
     test "publishes disconnect to subscribers" do
-      assert {:ok, connection} = Connection.start_link()
+      assert {:ok, connection} = Connection.start_link(TestConnection)
 
       Connection.subscribe(connection)
 
@@ -49,7 +60,7 @@ defmodule Rabbit.ConnectionTest do
 
   describe "subscribe/2" do
     test "subscribes to connection" do
-      assert {:ok, connection} = Connection.start_link()
+      assert {:ok, connection} = Connection.start_link(TestConnection)
 
       state = GenServer.call(connection, :state)
 
@@ -65,7 +76,7 @@ defmodule Rabbit.ConnectionTest do
 
   @tag capture_log: true
   test "will reconnect when connection stops" do
-    assert {:ok, connection} = Connection.start_link()
+    assert {:ok, connection} = Connection.start_link(TestConnection)
     assert :ok = Connection.subscribe(connection)
     assert {:ok, raw_conn} = Connection.fetch(connection)
 
@@ -76,7 +87,7 @@ defmodule Rabbit.ConnectionTest do
   end
 
   test "removes dead monitors" do
-    assert {:ok, connection} = Connection.start_link()
+    assert {:ok, connection} = Connection.start_link(TestConnection)
 
     task =
       Task.async(fn ->
@@ -94,7 +105,7 @@ defmodule Rabbit.ConnectionTest do
   end
 
   test "removes dead subscribers" do
-    assert {:ok, connection} = Connection.start_link()
+    assert {:ok, connection} = Connection.start_link(TestConnection)
 
     task =
       Task.async(fn ->
@@ -111,28 +122,20 @@ defmodule Rabbit.ConnectionTest do
     refute MapSet.member?(state.subscribers, task.pid)
   end
 
-  test "creating connection modules" do
-    defmodule ConnOne do
-      use Rabbit.Connection
-    end
-
-    assert {:ok, _} = ConnOne.start_link()
-    assert true = ConnOne.alive?()
-  end
-
   test "connection modules use init callback" do
-    Process.register(self(), :conn_two)
+    Process.register(self(), :connection_test)
 
-    defmodule ConnTwo do
+    defmodule TestConnectionTwo do
       use Rabbit.Connection
 
-      def init(opts) do
-        send(:conn_two, :init_callback)
+      @impl Rabbit.Connection
+      def init(:connection, opts) do
+        send(:connection_test, :init_callback)
         {:ok, opts}
       end
     end
 
-    assert {:ok, _} = ConnTwo.start_link()
+    assert {:ok, _connection} = Connection.start_link(TestConnectionTwo)
     assert_receive :init_callback
   end
 end

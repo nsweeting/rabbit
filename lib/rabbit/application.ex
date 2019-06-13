@@ -3,6 +3,7 @@ defmodule Rabbit.Application do
 
   use Application
 
+  @doc false
   @impl Application
   def start(_type, _args) do
     children = [

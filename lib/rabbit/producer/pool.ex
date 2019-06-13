@@ -6,23 +6,15 @@ defmodule Rabbit.Producer.Pool do
   ################################
 
   @worker_opts [
-    :module,
+    :connection,
     :publish_opts,
     :async_connect
   ]
 
   @doc false
-  def child_spec(opts) do
-    %{
-      id: __MODULE__,
-      start: {__MODULE__, :start_link, opts}
-    }
-  end
-
-  @doc false
-  def start_link(connection, opts \\ [], server_opts \\ []) do
+  def start_link(module, opts \\ [], server_opts \\ []) do
     pool_opts = get_pool_opts(opts, server_opts)
-    worker_opts = get_worker_opts(connection, opts)
+    worker_opts = get_worker_opts(module, opts)
     :poolboy.start_link(pool_opts, worker_opts)
   end
 
@@ -49,8 +41,8 @@ defmodule Rabbit.Producer.Pool do
     end
   end
 
-  defp get_worker_opts(connection, opts) do
+  defp get_worker_opts(module, opts) do
     opts = Keyword.take(opts, @worker_opts)
-    Keyword.put(opts, :connection, connection)
+    Keyword.put(opts, :module, module)
   end
 end

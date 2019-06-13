@@ -2,48 +2,70 @@ defmodule Rabbit.ConsumerSupervisor do
   @moduledoc """
   A RabbitMQ consumer supervisor process.
 
-  This enables starting and supervising multiple `Rabbit.Consumer` processes with ease.
+  This allows starting and supervising multiple `Rabbit.Consumer` processes with ease.
 
   ## Example
 
       # This is a connection
       defmodule MyConnection do
         use Rabbit.Connection
+
+        def start_link(opts \\\\ []) do
+          Rabbit.Connection.start_link(__MODULE__, opts, name: __MODULE__)
+        end
+
+        # Callbacks
+
+        @impl Rabbit.Connection
+        def init(:connection, opts) do
+          # Perform any runtime configuration
+          {:ok, opts}
+        end
       end
 
       # This is a consumer supervisor
       defmodule MyConsumers do
         use Rabbit.ConsumerSupervisor
 
-        # Callbacks
-
-        # Setup the consumers you want
-        def consumers do
-          [
-            [queue: "myqueue1", prefetch_count: 10],
-            [queue: "myqueue2", prefetch_count: 10]
-          ]
+        def start_link(consumers \\\\ []) do
+          Rabbit.ConsumerSupervisor.start_link(__MODULE__, consumers, name: __MODULE__)
         end
 
-        # Perform any runtime configuration per consumer
-        def init(opts) do
+        # Callbacks
+
+        @impl Rabbit.ConsumerSupervisor
+        def init(:consumer_supervisor, _consumers) do
+          # Perform any runtime configuration for the supervisor
+          consumers = [
+            [connection: MyConnection, queue: "my_queue1", prefetch_count: 5],
+            [connection: MyConnection, queue: "my_queue2", prefetch_count: 10]
+          ]
+
+          {:ok, consumers}
+        end
+
+        def init(:consumer, opts) do
+          # Perform any runtime configuration per consumer
           {:ok, opts}
         end
 
-        # Perform exchange or queue setup per consumer
-        def after_connect(channel, queue) do
+        @impl Rabbit.ConsumerSupervisor
+        def handle_setup(channel, queue) do
+          # Perform exchange or queue setup per consumer
           AMQP.Queue.declare(channel, queue)
 
           :ok
         end
 
-        # Handle messages per consumer
+        @impl Rabbit.ConsumerSupervisor
         def handle_message(message) do
+          # Handle messages per consumer
           {:ack, message}
         end
 
-        # Handle errors that occur per consumer
+        @impl Rabbit.ConsumerSupervisor
         def handle_error(message) do
+          # Handle errors that occur per consumer
           {:nack, message}
         end
       end
@@ -52,51 +74,61 @@ defmodule Rabbit.ConsumerSupervisor do
       MyConnection.start_link()
 
       # Start the consumers
-      MyConsumers.start_link(MyConnection)
-
-  Please see the documentation for `Rabbit.Consumer` for more details.
+      MyConsumers.start_link()
 
   """
-  alias Rabbit.{Consumer, ConsumerSupervisor}
+  alias Rabbit.Consumer
 
   @type t :: Supervisor.name()
   @type consumers() :: [Rabbit.Consumer.options()]
 
   @doc """
-  Starts a consumer supervisor process.
+  A callback executed by each component of the consumer supervisor.
+
+  Two versions of the callback must be created. One for the supervisor, and one
+  for the consumers. The first argument differentiates the callback.
+
+        # Initialize the supervisor
+        def init(:consumer_supervisor, consumers) do
+          {:ok, consumers}
+        end
+
+        # Initialize a single consumer
+        def init(:consumer, opts) do
+          {:ok, opts}
+        end
+
+  Returning `{:ok, consumers}` - where `consumers` is a list of `t:Rabbit.Consumer.options/0`
+  will, cause `start_link/3` to return `{:ok, pid}` and the supervisor to enter its loop.
+
+  Returning `{:ok, opts}` - where `opts` is a keyword list of `t:Rabbit.Consumer.option/0` will,
+  cause `start_link/3` to return `{:ok, pid}` and the consumer to enter its loop.
+
+  Returning `:ignore` will cause `start_link/3` to return `:ignore` and the process
+  will exit normally without entering the loop.
   """
-  @callback start_link(connection :: Rabbit.Connection.t(), server_opts :: GenServer.options()) ::
-              Supervisor.on_start()
+  @callback init(
+              type :: :consumer_supervisor | :consumer,
+              opts :: consumers() | Rabbit.Consumer.options()
+            ) ::
+              {:ok, consumers() | Rabbit.Consumer.options()} | :ignore
 
   @doc """
-  Stops a consumer supervisor process.
+  A callback executed by each consumer after the channel is open, but before
+  consumption.
+
+  Please see `c:Rabbit.Consumer.handle_setup/2` for more information.
   """
-  @callback stop() :: :ok
+  @callback handle_setup(channel :: AMQP.Channel.t(), queue :: String.t()) :: :ok
 
   @doc """
-  A callback used to fetch the list of consumers under the supervisor.
+  A callback executed by each consumer to handle message consumption.
 
-  This callback must return a list of `t:Rabbit.Consumer.options/0`
-  """
-  @callback consumers() :: consumers()
-
-  @doc """
-  Please see `c:Rabbit.Consumer.init/1` for details.
-  """
-  @callback init(options :: Rabbit.Consumer.options()) ::
-              {:ok, Rabbit.Consumer.options()} | :ignore
-
-  @doc """
-  Please see `c:Rabbit.Consumer.after_connect/2` for details.
-  """
-  @callback after_connect(channel :: AMQP.Channel.t(), queue :: String.t()) :: :ok
-
-  @doc """
-  Please see `c:Rabbit.Consumer.handle_message/1` for details.
+  Please see `c:Rabbit.Consumer.handle_message/1` for more information.
   """
   @callback handle_message(message :: Rabbit.Message.t()) ::
               {:ack, Rabbit.Message.t()}
-              | {:ack, Rabbit.Message.t(), Keyword.t()}
+              | {:ack, Rabbit.Message.t(), Rabbit.Consumer.action_options()}
               | {:nack, Rabbit.Message.t()}
               | {:nack, Rabbit.Message.t(), Rabbit.Consumer.action_options()}
               | {:reject, Rabbit.Message.t()}
@@ -104,7 +136,9 @@ defmodule Rabbit.ConsumerSupervisor do
               | any()
 
   @doc """
-  Please see `c:Rabbit.Consumer.handle_error/1` for details.
+  A callback executed by each consumer to handle message exceptions.
+
+  Please see `c:Rabbit.Consumer.handle_error/1` for more information.
   """
   @callback handle_error(message :: Rabbit.Message.t()) ::
               {:ack, Rabbit.Message.t()}
@@ -115,15 +149,23 @@ defmodule Rabbit.ConsumerSupervisor do
               | {:reject, Rabbit.Message.t(), Rabbit.Consumer.action_options()}
               | any()
 
-  @optional_callbacks init: 1, after_connect: 2
-
   ################################
   # Public API
   ################################
 
-  @doc false
-  def start_link(connection, module, server_opts \\ []) do
-    Consumer.Supervisor.start_link(connection, module, server_opts)
+  @doc """
+  Starts a consumer supervisor process.
+
+  The list of consumers should represent a list of `t:Rabbit.Consumer.options/0`.
+
+  ## Server Options
+
+  You can also provide server options - which are simply the same ones available
+  for `t:GenServer.options/0`.
+
+  """
+  def start_link(module, consumers \\ [], server_opts \\ []) do
+    Consumer.Supervisor.start_link(module, consumers, server_opts)
   end
 
   @doc false
@@ -131,27 +173,28 @@ defmodule Rabbit.ConsumerSupervisor do
     Supervisor.stop(consumer_supervisor)
   end
 
-  defmacro __using__(_) do
-    quote do
+  defmacro __using__(opts) do
+    quote location: :keep do
       @behaviour Rabbit.ConsumerSupervisor
 
+      if Module.get_attribute(__MODULE__, :doc) == nil do
+        @doc """
+        Returns a specification to start this consumer supervisor under a supervisor.
+        See `Supervisor`.
+        """
+      end
+
       def child_spec(args) do
-        %{
+        default = %{
           id: __MODULE__,
-          start: {__MODULE__, :start_link, args}
+          start: {__MODULE__, :start_link, [args]},
+          type: :supervisor
         }
+
+        Supervisor.child_spec(default, unquote(Macro.escape(opts)))
       end
 
-      @impl Rabbit.ConsumerSupervisor
-      def start_link(connection, server_opts \\ []) do
-        server_opts = Keyword.put(server_opts, :name, __MODULE__)
-        ConsumerSupervisor.start_link(connection, __MODULE__, server_opts)
-      end
-
-      @impl Rabbit.ConsumerSupervisor
-      def stop do
-        ConsumerSupervisor.stop(__MODULE__)
-      end
+      defoverridable(child_spec: 1)
     end
   end
 end

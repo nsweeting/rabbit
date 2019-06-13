@@ -8,8 +8,8 @@ defmodule Rabbit.Consumer.Supervisor do
   ################################
 
   @doc false
-  def start_link(connection, module, server_opts \\ []) do
-    Supervisor.start_link(__MODULE__, {connection, module}, server_opts)
+  def start_link(module, consumers \\ [], server_opts \\ []) do
+    Supervisor.start_link(__MODULE__, {module, consumers}, server_opts)
   end
 
   ################################
@@ -18,25 +18,25 @@ defmodule Rabbit.Consumer.Supervisor do
 
   @doc false
   @impl Supervisor
-  def init({connection, module}) do
-    consumers = module.consumers()
-    children = build_children(connection, module, consumers, [])
-    Supervisor.init(children, strategy: :one_for_one)
+  def init({module, consumers}) do
+    with {:ok, consumers} <- module.init(:consumer_supervisor, consumers) do
+      children = build_children(module, consumers, [])
+      Supervisor.init(children, strategy: :one_for_one)
+    end
   end
 
   ################################
   # Private API
   ################################
 
-  defp build_children(_connection, _module, [], children) do
+  defp build_children(_module, [], children) do
     children
   end
 
-  defp build_children(connection, module, [consumer | consumers], children) do
+  defp build_children(module, [consumer | consumers], children) do
     id = children |> Enum.count() |> to_string() |> String.to_atom()
-    opts = Keyword.put(consumer, :module, module)
-    spec = {Rabbit.Consumer, [connection, opts]}
-    children = children ++ [Supervisor.child_spec(spec, id: id)]
-    build_children(connection, module, consumers, children)
+    spec = %{id: id, start: {Rabbit.Consumer, :start_link, [module, consumer]}}
+    children = children ++ [spec]
+    build_children(module, consumers, children)
   end
 end
