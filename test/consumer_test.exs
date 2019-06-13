@@ -3,16 +3,41 @@ defmodule Rabbit.ConsumerTest do
 
   alias Rabbit.{Connection, Consumer, Producer}
 
-  defmodule ConsumerOne do
+  defmodule TestConnection do
+    use Rabbit.Connection
+
+    @impl Rabbit.Connection
+    def init(:connection, opts) do
+      {:ok, opts}
+    end
+  end
+
+  defmodule TestProducer do
+    use Rabbit.Producer
+
+    @impl Rabbit.Producer
+    def init(:producer, opts) do
+      {:ok, opts}
+    end
+  end
+
+  defmodule TestConsumer do
     use Rabbit.Consumer
 
-    def after_connect(chan, queue) do
+    @impl Rabbit.Consumer
+    def init(:consumer, opts) do
+      {:ok, opts}
+    end
+
+    @impl Rabbit.Consumer
+    def handle_setup(chan, queue) do
       AMQP.Queue.declare(chan, queue, auto_delete: true)
       AMQP.Queue.purge(chan, queue)
 
       :ok
     end
 
+    @impl Rabbit.Consumer
     def handle_message(msg) do
       decoded_payload = Base.decode64!(msg.payload)
       {pid, ref} = :erlang.binary_to_term(decoded_payload)
@@ -20,21 +45,22 @@ defmodule Rabbit.ConsumerTest do
       :ok
     end
 
+    @impl Rabbit.Consumer
     def handle_error(_) do
       :ok
     end
   end
 
   setup do
-    {:ok, connection} = Connection.start_link()
-    {:ok, producer} = Producer.start_link(connection)
+    {:ok, connection} = Connection.start_link(TestConnection)
+    {:ok, producer} = Producer.start_link(TestProducer, connection: connection)
     %{connection: connection, producer: producer}
   end
 
   describe "start_link/3" do
     test "starts consumer", meta do
       assert {:ok, _con} =
-               Consumer.start_link(meta.connection, module: ConsumerOne, queue: "consumer")
+               Consumer.start_link(TestConsumer, connection: meta.connection, queue: "consumer")
     end
   end
 
@@ -92,37 +118,16 @@ defmodule Rabbit.ConsumerTest do
     assert_receive {:handle_message, ^ref3}
   end
 
-  test "creating consumer modules", meta do
-    defmodule ConsumerTwo do
-      use Rabbit.Consumer
-
-      def after_connect(chan, queue) do
-        AMQP.Queue.declare(chan, queue, auto_delete: true)
-        AMQP.Queue.purge(chan, queue)
-
-        :ok
-      end
-
-      def handle_message(_msg), do: :ok
-
-      def handle_error(_msg), do: :ok
-    end
-
-    assert {:ok, consumer} = ConsumerTwo.start_link(meta.connection, queue: queue_name())
-    assert true = Process.alive?(consumer)
-    assert :ok = await_consuming(consumer)
-  end
-
   test "consumer modules use init callback", meta do
-    defmodule ConsumerThree do
+    defmodule TestConsumerTwo do
       use Rabbit.Consumer
 
-      def init(opts) do
+      def init(:consumer, opts) do
         opts = Keyword.put(opts, :queue, "consumer_three")
         {:ok, opts}
       end
 
-      def after_connect(chan, queue) do
+      def handle_setup(chan, queue) do
         AMQP.Queue.declare(chan, queue, auto_delete: true)
         AMQP.Queue.purge(chan, queue)
 
@@ -134,7 +139,7 @@ defmodule Rabbit.ConsumerTest do
       def handle_error(_msg), do: :ok
     end
 
-    assert {:ok, consumer} = ConsumerThree.start_link(meta.connection)
+    assert {:ok, consumer} = Consumer.start_link(TestConsumerTwo, connection: meta.connection)
     assert true = Process.alive?(consumer)
     assert :ok = await_consuming(consumer)
 
@@ -145,8 +150,8 @@ defmodule Rabbit.ConsumerTest do
 
   defp start_consumer(meta, opts \\ []) do
     queue = queue_name()
-    opts = [module: ConsumerOne, queue: queue] ++ opts
-    {:ok, consumer} = Consumer.start_link(meta.connection, opts)
+    opts = [connection: meta.connection, queue: queue] ++ opts
+    {:ok, consumer} = Consumer.start_link(TestConsumer, opts)
     await_consuming(consumer)
     {:ok, consumer, queue}
   end

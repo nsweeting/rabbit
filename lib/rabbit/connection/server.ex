@@ -8,7 +8,6 @@ defmodule Rabbit.Connection.Server do
   require Logger
 
   @opts_schema %{
-    module: [type: :module, required: false],
     uri: [type: :binary, required: false],
     username: [type: :binary, default: "guest", required: false],
     password: [type: :binary, default: "guest", required: false],
@@ -46,8 +45,8 @@ defmodule Rabbit.Connection.Server do
   ################################
 
   @doc false
-  def start_link(opts \\ [], server_opts \\ []) do
-    GenServer.start_link(__MODULE__, opts, server_opts)
+  def start_link(module, opts \\ [], server_opts \\ []) do
+    GenServer.start_link(__MODULE__, {module, opts}, server_opts)
   end
 
   ################################
@@ -56,8 +55,8 @@ defmodule Rabbit.Connection.Server do
 
   @doc false
   @impl GenServer
-  def init(opts) do
-    with {:ok, opts} <- connection_init(opts) do
+  def init({module, opts}) do
+    with {:ok, opts} <- module.init(:connection, opts) do
       opts = KeywordValidator.validate!(opts, @opts_schema)
       state = init_state(opts)
       {:ok, state, {:continue, :connect}}
@@ -126,16 +125,6 @@ defmodule Rabbit.Connection.Server do
   ################################
   # Private API
   ################################
-
-  defp connection_init(opts) do
-    module = Keyword.get(opts, :module)
-
-    if callback_exported?(module, :init, 1) do
-      module.init(opts)
-    else
-      {:ok, opts}
-    end
-  end
 
   defp init_state(opts) do
     %{

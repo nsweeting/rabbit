@@ -7,20 +7,23 @@ defmodule Rabbit.Connection do
 
   * Durability during connection failures through use of expotential backoff.
   * Subscriptions that assist connection status monitoring.
-  * Ability to create module-based connections that permit easy runtime setup
-    through an `c:init/1` callback.
+  * Easy runtime setup through an `c:init/2` callback.
 
   ## Example
 
-      # This is a connection
+      # Connection module
       defmodule MyConnection do
         use Rabbit.Connection
 
+        def start_link(opts \\\\ []) do
+          Rabbit.Connection.start_link(__MODULE__, opts, name: __MODULE__)
+        end
+
         # Callbacks
 
-        # Perform any runtime configuration
-        def init(opts) do
-          opts = Keyword.put(opts, :uri, System.get_env("RABBIT_URI"))
+        @impl Rabbit.Connection
+        def init(_type, opts) do
+          # Perform any runtime configuration
           {:ok, opts}
         end
       end
@@ -29,17 +32,17 @@ defmodule Rabbit.Connection do
       MyConnection.start_link()
 
       # Subscribe to the connection
-      MyConnection.subscribe()
+      Rabbit.Connection.subscribe(MyConnection)
 
       receive do
-        {:connected, connection} -> # Do stuff with AMQP.Connection
+        {:connected, connection} -> "hello"
       end
 
       # Stop the connection
-      MyConnection.stop()
+      Rabbit.Connection.stop(MyConnection)
 
       receive do
-        {:disconnected, reason} -> # Do stuff with disconnect
+        {:disconnected, reason} -> "bye"
       end
 
   """
@@ -67,9 +70,25 @@ defmodule Rabbit.Connection do
   @type options :: uri() | [option()]
 
   @doc """
-  Starts a RabbitMQ connection process.
+  A callback executed when the connection is started.
+
+  Returning `{:ok, opts}` - where `opts` is a keyword list of `t:option/0` will,
+  cause `start_link/3` to return `{:ok, pid}` and the process to enter its loop.
+
+  Returning `:ignore` will cause `start_link/3` to return `:ignore` and the process
+  will exit normally without entering the loop.
+  """
+  @callback init(:connection, options()) :: {:ok, options()} | :ignore
+
+  ################################
+  # Public API
+  ################################
+
+  @doc """
+  Starts a connection process.
 
   ## Options
+
     * `:uri` - The connection URI. This takes priority over other connection  attributes.
     * `:username` - The name of a user registered with the broker - defaults to `"guest"`.
     * `:password` - The password of user - defaults to `"guest\`.
@@ -86,28 +105,43 @@ defmodule Rabbit.Connection do
       See http://www.erlang.org/doc/man/inet.html#setopts-2 and http://www.erlang.org/doc/man/gen_tcp.html#connect-4 \
       for descriptions of the available options.
 
+  ## Server Options
+
+  You can also provide server options - which are simply the same ones available
+  for `t:GenServer.options/0`.
+
   """
-  @callback start_link(options()) :: GenServer.on_start()
+  @spec start_link(module(), options(), GenServer.options()) :: GenServer.on_start()
+  def start_link(module, opts \\ [], server_opts \\ []) do
+    Connection.Server.start_link(module, opts, server_opts)
+  end
 
   @doc """
-  Stops a RabbitMQ connection process.
+  Stops a connection process.
   """
-  @callback stop() :: :ok | {:error, any()}
-
-  @callback init(options()) :: {:ok, options()} | :ignore
+  @spec stop(Rabbit.Connection.t()) :: :ok
+  def stop(connection) do
+    GenServer.stop(connection, :normal)
+  end
 
   @doc """
   Fetches the raw `AMQP.Connection` struct from the process.
   """
-  @callback fetch() :: {:ok, Rabbit.Connection.t()} | {:error, :not_connected}
+  @spec fetch(Rabbit.Connection.t()) :: {:ok, AMQP.Connection.t()} | {:error, :not_connected}
+  def fetch(connection) do
+    GenServer.call(connection, :fetch)
+  end
 
   @doc """
   Checks whether a connection is alive.
   """
-  @callback alive?() :: boolean()
+  @spec alive?(Rabbit.Connection.t()) :: boolean()
+  def alive?(connection) do
+    GenServer.call(connection, :alive?)
+  end
 
   @doc """
-  Subscribes a process to the RabbitMQ connection.
+  Subscribes a process to the connection.
 
   A subscribed process can receive the following messages:
 
@@ -124,91 +158,33 @@ defmodule Rabbit.Connection do
   connection is achieved again.
 
   """
-  @callback subscribe(subscriber :: pid() | nil) :: :ok
-
-  @optional_callbacks init: 1
-
-  ################################
-  # Public API
-  ################################
-
-  @doc false
-  def child_spec(args) do
-    %{
-      id: __MODULE__,
-      start: {__MODULE__, :start_link, args}
-    }
-  end
-
-  @doc false
-  @spec start_link(options(), GenServer.options()) :: GenServer.on_start()
-  def start_link(opts \\ [], server_opts \\ []) do
-    Connection.Server.start_link(opts, server_opts)
-  end
-
-  @doc false
-  @spec stop(Rabbit.Connection.t()) :: :ok
-  def stop(connection) do
-    GenServer.stop(connection, :normal)
-  end
-
-  @doc false
-  @spec fetch(Rabbit.Connection.t()) :: {:ok, AMQP.Connection.t()} | {:error, :not_connected}
-  def fetch(connection) do
-    GenServer.call(connection, :fetch)
-  end
-
-  @doc false
-  @spec alive?(Rabbit.Connection.t()) :: boolean()
-  def alive?(connection) do
-    GenServer.call(connection, :alive?)
-  end
-
-  @doc false
   @spec subscribe(Rabbit.Connection.t(), pid() | nil) :: :ok
   def subscribe(connection, subscriber \\ nil) do
     subscriber = subscriber || self()
     GenServer.call(connection, {:subscribe, subscriber})
   end
 
-  defmacro __using__(_) do
-    quote do
+  defmacro __using__(opts) do
+    quote location: :keep do
       @behaviour Rabbit.Connection
 
-      def child_spec(opts) do
-        %{
+      if Module.get_attribute(__MODULE__, :doc) == nil do
+        @doc """
+        Returns a specification to start this connection under a supervisor.
+        See `Supervisor`.
+        """
+      end
+
+      def child_spec(args) do
+        default = %{
           id: __MODULE__,
-          start: {__MODULE__, :start_link, opts}
+          start: {__MODULE__, :start_link, [args]}
         }
+
+        Supervisor.child_spec(default, unquote(Macro.escape(opts)))
       end
 
-      @impl Rabbit.Connection
-      def start_link(opts \\ [], server_opts \\ []) do
-        opts = Keyword.put(opts, :module, __MODULE__)
-        server_opts = Keyword.put(server_opts, :name, __MODULE__)
-
-        Connection.start_link(opts, server_opts)
-      end
-
-      @impl Rabbit.Connection
-      def stop do
-        Connection.stop(__MODULE__)
-      end
-
-      @impl Rabbit.Connection
-      def fetch do
-        Connection.fetch(__MODULE__)
-      end
-
-      @impl Rabbit.Connection
-      def alive? do
-        Connection.alive?(__MODULE__)
-      end
-
-      @impl Rabbit.Connection
-      def subscribe(subscriber \\ nil) do
-        Connection.subscribe(__MODULE__, subscriber)
-      end
+      defoverridable(child_spec: 1)
     end
   end
 end
