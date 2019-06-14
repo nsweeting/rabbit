@@ -1,5 +1,5 @@
+dist: trusty
 language: elixir
-sudo: false
 matrix:
   include:
     - elixir:  1.8
