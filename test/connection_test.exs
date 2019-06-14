@@ -98,6 +98,7 @@ defmodule Rabbit.ConnectionTest do
       end)
 
     Task.await(task)
+    :timer.sleep(50)
     state = GenServer.call(connection, :state)
 
     refute Map.has_key?(state.monitors, task.pid)
@@ -116,6 +117,7 @@ defmodule Rabbit.ConnectionTest do
       end)
 
     Task.await(task)
+    :timer.sleep(50)
     state = GenServer.call(connection, :state)
 
     refute MapSet.member?(state.subscribers, task.pid)
