@@ -74,7 +74,6 @@ defmodule Rabbit.ConnectionTest do
     end
   end
 
-  @tag capture_log: true
   test "will reconnect when connection stops" do
     assert {:ok, connection} = Connection.start_link(TestConnection)
     assert :ok = Connection.subscribe(connection)

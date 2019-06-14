@@ -85,7 +85,6 @@ defmodule Rabbit.ConsumerTest do
     end
   end
 
-  @tag capture_log: true
   test "will reconnect when connection stops", meta do
     assert {:ok, consumer, _queue} = start_consumer(meta)
 

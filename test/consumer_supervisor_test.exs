@@ -55,7 +55,7 @@ defmodule Rabbit.ConsumerSupervisorTest do
     end
   end
 
-  setup do
+  setup_all do
     {:ok, connection} = Connection.start_link(TestConnection, [], name: TestConnection)
     %{connection: connection}
   end

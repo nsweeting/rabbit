@@ -62,6 +62,8 @@ defmodule Rabbit.ProducerTest do
       assert Process.alive?(state.channel.pid)
       assert :ok = Producer.stop(producer)
 
+      :timer.sleep(50)
+
       refute Process.alive?(state.channel.pid)
     end
   end
@@ -86,7 +88,6 @@ defmodule Rabbit.ProducerTest do
     end
   end
 
-  @tag capture_log: true
   test "will reconnect when connection stops" do
     {:ok, amqp_conn} = AMQP.Connection.open()
     {:ok, amqp_chan} = AMQP.Channel.open(amqp_conn)
