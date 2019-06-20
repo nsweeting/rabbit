@@ -1,7 +1,7 @@
 # Rabbit
 
 [![Build Status](https://travis-ci.org/nsweeting/rabbit.svg?branch=master)](https://travis-ci.org/nsweeting/rabbit)
-[![StatBuffer Version](https://img.shields.io/hexpm/v/rabbit.svg)](https://hex.pm/packages/rabbit)
+[![Rabbit Version](https://img.shields.io/hexpm/v/rabbit.svg)](https://hex.pm/packages/rabbit)
 
 Rabbit is a set of tools for building applications with RabbitMQ.
 
