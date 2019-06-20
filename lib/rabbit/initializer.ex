@@ -71,29 +71,35 @@ defmodule Rabbit.Initializer do
 
   @type t :: GenServer.name()
   @type exchange ::
-          {:name, binary()}
-          | {:type, :direct | :fanout | :topic | :match | :headers}
-          | {:durable, boolean()}
-          | {:auto_delete, boolean()}
-          | {:internal, boolean()}
-          | {:passive, boolean()}
-          | {:no_wait, boolean()}
-          | {:arguments, list()}
+          [
+            {:name, binary()}
+            | {:type, :direct | :fanout | :topic | :match | :headers}
+            | {:durable, boolean()}
+            | {:auto_delete, boolean()}
+            | {:internal, boolean()}
+            | {:passive, boolean()}
+            | {:no_wait, boolean()}
+            | {:arguments, list()}
+          ]
   @type queue ::
-          {:name, binary()}
-          | {:durable, boolean()}
-          | {:auto_delete, boolean()}
-          | {:exclusive, boolean()}
-          | {:passive, boolean()}
-          | {:no_wait, boolean()}
-          | {:arguments, list()}
+          [
+            {:name, binary()}
+            | {:durable, boolean()}
+            | {:auto_delete, boolean()}
+            | {:exclusive, boolean()}
+            | {:passive, boolean()}
+            | {:no_wait, boolean()}
+            | {:arguments, list()}
+          ]
   @type binding ::
-          {:type, :queue | :exchange}
-          | {:source, binary()}
-          | {:destination, binary()}
-          | {:routing_key, binary()}
-          | {:no_wait, boolean()}
-          | {:arguments, list()}
+          [
+            {:type, :queue | :exchange}
+            | {:source, binary()}
+            | {:destination, binary()}
+            | {:routing_key, binary()}
+            | {:no_wait, boolean()}
+            | {:arguments, list()}
+          ]
   @type option ::
           {:connection, Rabbit.Connection.t()}
           | {:retry_backoff, non_neg_integer()}
