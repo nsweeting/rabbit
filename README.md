@@ -21,7 +21,7 @@ end
 
 Please see [HexDocs](https://hexdocs.pm/rabbit) for additional documentation.
 
-## Connections
+## [Connections](https://hexdocs.pm/rabbit/Rabbit.Connection.html)
 
 Create a connection module:
 
@@ -48,7 +48,7 @@ end
 MyConnection.start_link()
 ```
 
-## Consumers
+## [Consumers](https://hexdocs.pm/rabbit/Rabbit.Consumer.html)
 
 Create a consumer module:
 
@@ -92,7 +92,9 @@ end
 MyConsumer.start_link(connection: MyConnection, queue: "my_queue", prefetch_count: 10)
 ```
 
-Or, create a consumer supervisor:
+## [Consumer Supervisors](https://hexdocs.pm/rabbit/Rabbit.ConsumerSupervisor.html)
+
+Create a consumer supervisor module:
 
 ```elixir
 defmodule MyConsumerSupervisor do
@@ -144,7 +146,7 @@ end
 MyConsumerSupervisor.start_link()
 ```
 
-## Producers
+## [Producers](https://hexdocs.pm/rabbit/Rabbit.Producer.html)
 
 Create a producer module:
 
@@ -158,12 +160,51 @@ defmodule MyProducer do
 
   # Callbacks
 
-  # Perform runtime config
+  @impl Rabbit.Producer
   def init(:producer, opts) do
+    # Perform runtime config
     {:ok, opts}
   end
 end
 
 MyProducer.start_link(connection: MyConnection)
 Rabbit.Producer.publish(MyProducer, "", "my_queue", "hello")
+```
+
+## [Initializers](https://hexdocs.pm/rabbit/Rabbit.Initializer.html)
+
+Create an initializer module:
+
+```elixir
+defmodule MyInitializer do
+  use Rabbit.Initializer
+
+  def start_link(opts \\ []) do
+    Rabbit.Initializer.start_link(__MODULE__, opts, name: __MODULE__)
+  end
+
+  # Callbacks
+
+  @impl Rabbit.Initializer
+  def init(:initializer, opts) do
+    # Perform runtime config
+    {:ok, opts}
+  end
+end
+
+MyInitializer.start_link(
+  connection: MyConnection,
+  queues: [
+    [name: "my_queue_1"],
+    [name: "my_queue_2", durable: true],
+  ],
+  exchanges: [
+    [name: "my_exchange_1"],
+    [name: "my_exchange_2", type: :fanout, durable: true],
+  ],
+  bindings: [
+    [type: :queue, source: "my_exchange_1", destination: "my_queue_1", routing_key: "my_key"],
+    [type: :exchange, source: "my_exchange_2", destination: "my_exchange_1"]
+  ]
+)
 ```

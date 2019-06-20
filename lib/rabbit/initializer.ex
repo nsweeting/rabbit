@@ -124,9 +124,9 @@ defmodule Rabbit.Initializer do
   ## Options
 
     * `:connection` - A `Rabbit.Connection` process.
-    * `:exchanges` - A list of exchanges to declare. Please see.
-    * `:queues` - A list of queues to declare. Please see.
-    * `:bindings` - A list of bindings to declare. Please see.
+    * `:exchanges` - A list of exchanges to declare. Please see [Exchanges](#start_link/3-exchanges).
+    * `:queues` - A list of queues to declare. Please see [Queues](#start_link/3-queues).
+    * `:bindings` - A list of bindings to declare. Please see [Bindings](#start_link/3-bindings).
     * `:retry_sleep` - The amount of time in milliseconds to sleep between attempts
       to fetch a connection from the connection process - defaults to `100`.
     * `:retry_max` - The max amount of connection retries that will be attempted before
@@ -134,7 +134,7 @@ defmodule Rabbit.Initializer do
 
   ## Exchanges
 
-  Declaring exchanges is done by provding a list of keyword options. The options
+  Declaring exchanges is done by providing a list of keyword options. The options
   include:
 
     * `:name` - The name of the exchange.
@@ -156,7 +156,7 @@ defmodule Rabbit.Initializer do
 
   ## Queues
 
-  Declaring queues is done by provding a list of keyword options. The options
+  Declaring queues is done by providing a list of keyword options. The options
   include:
 
     * `:name` - The name of the queue.
