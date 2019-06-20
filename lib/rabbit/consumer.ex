@@ -184,6 +184,7 @@ defmodule Rabbit.Consumer do
 
   ## Options
 
+    * `:connection` - A `Rabbit.Connection` process.
     * `:queue` - The queue to consume messages from.
     * `:prefetch_count` - The basic unit of concurrency for a given consumer - defaults to `0`.
     * `:prefetch_size` - The prefetch window size in octets - defaults to `0`, meaning

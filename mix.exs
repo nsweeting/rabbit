@@ -51,13 +51,13 @@ defmodule Rabbit.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      {:amqp, "~> 1.1"},
+      {:amqp, "~> 1.2"},
       {:poolboy, "~> 1.5"},
       {:keyword_validator, "~> 0.4"},
       {:jason, "~> 1.1", optional: true},
       {:benchee, "~> 1.0", only: :dev, runtime: false},
       {:dialyxir, "~> 0.5", only: [:dev, :test], runtime: false},
-      {:credo, "~> 1.0.0", only: [:dev, :test], runtime: false},
+      {:credo, "~> 1.1", only: [:dev, :test], runtime: false},
       {:inch_ex, github: "rrrene/inch_ex", only: [:dev, :test], runtime: false},
       {:ex_doc, "~> 0.20", only: :dev, runtime: false}
     ]
