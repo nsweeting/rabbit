@@ -5,22 +5,33 @@ defmodule Rabbit.Producer.Pool do
   # Public API
   ################################
 
+  @opts_schema %{
+    pool_size: [type: :integer, required: true, default: 1],
+    max_overflow: [type: :integer, required: true, default: 0]
+  }
   @worker_opts [
     :connection,
-    :publish_opts,
-    :async_connect
+    :publish_opts
   ]
 
   @doc false
   def start_link(module, opts \\ [], server_opts \\ []) do
-    pool_opts = get_pool_opts(opts, server_opts)
     worker_opts = get_worker_opts(module, opts)
-    :poolboy.start_link(pool_opts, worker_opts)
+
+    with {:ok, opts} <- module.init(:producer_pool, opts),
+         {:ok, opts} <- validate_opts(opts) do
+      pool_opts = get_pool_opts(opts, server_opts)
+      :poolboy.start_link(pool_opts, worker_opts)
+    end
   end
 
   ################################
   # Private API
   ################################
+
+  defp validate_opts(opts) do
+    KeywordValidator.validate(opts, @opts_schema, strict: false)
+  end
 
   defp get_pool_opts(opts, server_opts) do
     [

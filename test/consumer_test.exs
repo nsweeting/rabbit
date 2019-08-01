@@ -16,7 +16,7 @@ defmodule Rabbit.ConsumerTest do
     use Rabbit.Producer
 
     @impl Rabbit.Producer
-    def init(:producer, opts) do
+    def init(_type, opts) do
       {:ok, opts}
     end
   end
@@ -61,6 +61,10 @@ defmodule Rabbit.ConsumerTest do
     test "starts consumer", meta do
       assert {:ok, _con} =
                Consumer.start_link(TestConsumer, connection: meta.connection, queue: "consumer")
+    end
+
+    test "returns error when given bad consumer options" do
+      assert {:error, _} = Consumer.start_link(TestConsumer, connection: 1)
     end
   end
 

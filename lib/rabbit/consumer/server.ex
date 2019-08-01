@@ -54,8 +54,8 @@ defmodule Rabbit.Consumer.Server do
   @doc false
   @impl GenServer
   def init({module, opts}) do
-    with {:ok, opts} <- module.init(:consumer, opts) do
-      opts = KeywordValidator.validate!(opts, @opts_schema)
+    with {:ok, opts} <- module.init(:consumer, opts),
+         {:ok, opts} <- validate_opts(opts, @opts_schema) do
       state = init_state(module, opts)
       {:ok, state, {:continue, :connection}}
     end

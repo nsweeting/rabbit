@@ -40,8 +40,13 @@ defmodule Rabbit.Producer do
         # Callbacks
 
         @impl Rabbit.Producer
-        def init(_type, opts) do
-          # Perform any runtime configuration...
+        def init(:producer_pool, opts) do
+          # Perform any runtime configuration for the pool
+          {:ok, opts}
+        end
+
+        def init(:producer, opts) do
+          # Perform any runtime configuration per producer
           {:ok, opts}
         end
       end
@@ -76,6 +81,14 @@ defmodule Rabbit.Producer do
   @type exchange :: String.t()
   @type routing_key :: String.t()
   @type message :: term()
+  @type producer_option ::
+          {:connection, Rabbit.Connection.t()}
+          | {:publish_opts, publish_options()}
+  @type producer_options :: [producer_option()]
+  @type pool_option ::
+          {:pool_size, non_neg_integer()}
+          | {:max_overflow, non_neg_integer()}
+  @type pool_options :: [pool_option()]
   @type publish_option ::
           {:mandatory, boolean()}
           | {:immediate, boolean()}
@@ -95,7 +108,20 @@ defmodule Rabbit.Producer do
   @type publish_options :: [publish_option()]
 
   @doc """
-  A callback executed when the producer is started.
+  A callback executed by each component of the producer.
+
+  Two versions of the callback must be created. One for the pool, and one
+  for the producers. The first argument differentiates the callback.
+
+        # Initialize the pool
+        def init(:producer_pool, opts) do
+          {:ok, opts}
+        end
+
+        # Initialize a single producer
+        def init(:producer, opts) do
+          {:ok, opts}
+        end
 
   Returning `{:ok, opts}` - where `opts` is a keyword list of `t:option()` will,
   cause `start_link/3` to return `{:ok, pid}` and the process to enter its loop.
@@ -103,7 +129,8 @@ defmodule Rabbit.Producer do
   Returning `:ignore` will cause `start_link/3` to return `:ignore` and the process
   will exit normally without entering the loop
   """
-  @callback init(:producer, options()) :: {:ok, options()} | :ignore
+  @callback init(:producer_pool | :producer, options()) ::
+              {:ok, pool_options() | producer_options()} | :ignore
 
   ################################
   # Public API

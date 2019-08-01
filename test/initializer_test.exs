@@ -43,7 +43,7 @@ defmodule Rabbit.InitializerTest do
     use Rabbit.Producer
 
     @impl Rabbit.Producer
-    def init(:producer, opts) do
+    def init(_type, opts) do
       {:ok, opts}
     end
   end
@@ -113,6 +113,10 @@ defmodule Rabbit.InitializerTest do
 
       assert {:error, :no_connection} =
                Initializer.start_link(TestInitializer, connection: connection, retry_max: 1)
+    end
+
+    test "returns error when given bad initializer options" do
+      assert {:error, _} = Initializer.start_link(TestInitializer, connection: 1)
     end
   end
 
