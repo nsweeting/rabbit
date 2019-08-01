@@ -12,7 +12,7 @@ The package can be installed by adding `rabbit` to your list of dependencies in 
 ```elixir
 def deps do
   [
-    {:rabbit, "~> 0.4"}
+    {:rabbit, "~> 0.5"}
   ]
 end
 ```
@@ -36,7 +36,7 @@ defmodule MyConnection do
   # Callbacks
 
   @impl Rabbit.Connection
-  def init(_type, opts) do
+  def init(:connection, opts) do
     # Perform runtime config
     uri = System.get_env("RABBITMQ_URI") || "amqp://guest:guest@127.0.0.1:5672"
     opts = Keyword.put(opts, :uri, uri)
@@ -63,7 +63,7 @@ defmodule MyConsumer do
   # Callbacks
 
   @impl Rabbit.Consumer
-  def init(_type, opts) do
+  def init(:consumer, opts) do
     # Perform runtime config
     {:ok, opts}
   end
@@ -161,8 +161,13 @@ defmodule MyProducer do
   # Callbacks
 
   @impl Rabbit.Producer
+  def init(:producer_pool, opts) do
+    # Perform runtime config for the producer pool
+    {:ok, opts}
+  end
+
   def init(:producer, opts) do
-    # Perform runtime config
+    # Perform runtime config per producer
     {:ok, opts}
   end
 end

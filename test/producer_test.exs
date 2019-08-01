@@ -16,7 +16,7 @@ defmodule Rabbit.ProducerTest do
     use Rabbit.Producer
 
     @impl Rabbit.Producer
-    def init(:producer, opts) do
+    def init(_type, opts) do
       {:ok, opts}
     end
   end
@@ -39,6 +39,16 @@ defmodule Rabbit.ProducerTest do
                Producer.start_link(TestProducer, connection: connection, pool_size: 3)
 
       assert [_, _, _] = GenServer.call(producer, :get_avail_workers)
+    end
+
+    test "returns error when given bad pool options" do
+      assert {:error, _} = Producer.start_link(TestProducer, pool_size: "foo")
+    end
+
+    test "returns error when given bad producer options" do
+      Process.flag(:trap_exit, true)
+      Producer.start_link(TestProducer, connection: "foo")
+      assert_receive {:EXIT, _, _}
     end
   end
 
@@ -111,7 +121,7 @@ defmodule Rabbit.ProducerTest do
       use Rabbit.Producer
 
       @impl Rabbit.Producer
-      def init(:producer, opts) do
+      def init(_type, opts) do
         send(:producer_test, :init_callback)
         {:ok, opts}
       end

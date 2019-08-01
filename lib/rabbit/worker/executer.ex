@@ -3,6 +3,8 @@ defmodule Rabbit.Worker.Executer do
 
   use GenServer
 
+  import Rabbit.Utilities
+
   require Logger
 
   @opts_schema %{
@@ -34,10 +36,11 @@ defmodule Rabbit.Worker.Executer do
   @doc false
   @impl GenServer
   def init({message, opts}) do
-    opts = KeywordValidator.validate!(opts, @opts_schema)
-    state = init_state(message, opts)
-    set_timeout(state.timeout)
-    {:ok, state, {:continue, :run}}
+    with {:ok, opts} <- validate_opts(opts, @opts_schema) do
+      state = init_state(message, opts)
+      set_timeout(state.timeout)
+      {:ok, state, {:continue, :run}}
+    end
   end
 
   @doc false

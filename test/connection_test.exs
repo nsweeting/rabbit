@@ -29,6 +29,10 @@ defmodule Rabbit.ConnectionTest do
       assert {:ok, connection} = Connection.start_link(TestConnection, [], name: :foo)
       assert true = Connection.alive?(:foo)
     end
+
+    test "returns error when given bad connection options" do
+      assert {:error, _} = Connection.start_link(TestConnection, uri: 1)
+    end
   end
 
   describe "stop/1" do

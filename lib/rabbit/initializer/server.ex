@@ -66,8 +66,8 @@ defmodule Rabbit.Initializer.Server do
   @doc false
   @impl GenServer
   def init({module, opts}) do
-    with {:ok, opts} <- module.init(:initializer, opts) do
-      opts = KeywordValidator.validate!(opts, @opts_schema)
+    with {:ok, opts} <- module.init(:initializer, opts),
+         {:ok, opts} <- validate_opts(opts, @opts_schema) do
       state = init_state(opts)
       initialize(state)
     end
