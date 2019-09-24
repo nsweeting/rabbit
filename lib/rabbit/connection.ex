@@ -2,7 +2,9 @@ defmodule Rabbit.Connection do
   @moduledoc """
   A RabbitMQ connection process.
 
-  This wraps around the standard `AMQP.Connection`. It provides the following
+  Connections form the basis of any application that is working with RabbitMQ. A
+  connection module is needed by all the other modules included with Rabbit. They
+  wrap around the standard `AMQP.Connection` and provide the following
   benefits:
 
   * Durability during connection failures through use of expotential backoff.

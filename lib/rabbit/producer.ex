@@ -2,11 +2,12 @@ defmodule Rabbit.Producer do
   @moduledoc """
   A RabbitMQ producer process.
 
-  This wraps around the standard `AMQP.Channel`. It provides the following benefits:
+  Producers are needed to publish any messages to RabbitMQ. They wrap around the
+  standard `AMQP.Channel` and provide the following benefits:
 
   * Durability during connection and channel failures through use of expotential backoff.
   * Channel pooling for increased publishing performance.
-  * Easy runtime setup through an `c:init/2` callback.
+  * Easy runtime setup through an `c:init/2` and `c:handle_setup/1` callbacks.
   * Simplification of standard publishing options.
   * Automatic payload encoding based on available serializers and message
     content type.
@@ -131,6 +132,28 @@ defmodule Rabbit.Producer do
   """
   @callback init(:producer_pool | :producer, options()) ::
               {:ok, pool_options() | producer_options()} | :ignore
+
+  @doc """
+  An optional callback executed after the channel is open.
+
+  The callback is called with an `AMQP.Channel`. At the most basic, you may want
+  to declare queues that you will be publishing to.
+
+      def handle_setup(channel) do
+        AMQP.Queue.declare(channel, "some_queue")
+
+        :ok
+      end
+
+  The callback must return an `:ok` atom - otherise it will be marked as failed,
+  and the consumer will attempt to go through the connection setup process again.
+
+  Alternatively, you could use a `Rabbit.Initializer` process to perform this
+  setup work. Please see its docs for more information.
+  """
+  @callback handle_setup(channel :: AMQP.Channel.t()) :: :ok | :error
+
+  @optional_callbacks handle_setup: 1
 
   ################################
   # Public API

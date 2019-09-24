@@ -2,7 +2,9 @@ defmodule Rabbit.ConsumerSupervisor do
   @moduledoc """
   A RabbitMQ consumer supervisor process.
 
-  This allows starting and supervising multiple `Rabbit.Consumer` processes with ease.
+  This allows starting and supervising multiple `Rabbit.Consumer` processes with
+  ease. Rather than creating a module for each consumer and implementing repetitive
+  logic - the same callbacks are used across all child consumers.
 
   ## Example
 

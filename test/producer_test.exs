@@ -132,6 +132,29 @@ defmodule Rabbit.ProducerTest do
     assert_receive :init_callback
   end
 
+  test "producer modules use handle_setup callback" do
+    Process.register(self(), :producer_test)
+
+    defmodule TestProducerThree do
+      use Rabbit.Producer
+
+      @impl Rabbit.Producer
+      def init(_type, opts) do
+        {:ok, opts}
+      end
+
+      @impl Rabbit.Producer
+      def handle_setup(_channel) do
+        send(:producer_test, :handle_setup_callback)
+        :ok
+      end
+    end
+
+    assert {:ok, connection} = Connection.start_link(TestConnection)
+    assert {:ok, producer} = Producer.start_link(TestProducerThree, connection: connection)
+    assert_receive :handle_setup_callback
+  end
+
   def await_publishing(producer) do
     producer
     |> GenServer.call(:get_avail_workers)

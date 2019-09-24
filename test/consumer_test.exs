@@ -122,33 +122,62 @@ defmodule Rabbit.ConsumerTest do
   end
 
   test "consumer modules use init callback", meta do
+    Process.register(self(), :consumer_test)
+
     defmodule TestConsumerTwo do
       use Rabbit.Consumer
 
+      @impl Rabbit.Consumer
       def init(:consumer, opts) do
-        opts = Keyword.put(opts, :queue, "consumer_three")
+        opts = Keyword.put(opts, :queue, "foo")
+        send(:consumer_test, :init_callback)
         {:ok, opts}
       end
 
-      def handle_setup(chan, queue) do
-        AMQP.Queue.declare(chan, queue, auto_delete: true)
-        AMQP.Queue.purge(chan, queue)
-
-        :ok
-      end
-
+      @impl Rabbit.Consumer
       def handle_message(_msg), do: :ok
 
+      @impl Rabbit.Consumer
       def handle_error(_msg), do: :ok
     end
 
-    assert {:ok, consumer} = Consumer.start_link(TestConsumerTwo, connection: meta.connection)
-    assert true = Process.alive?(consumer)
-    assert :ok = await_consuming(consumer)
+    assert {:ok, consumer} =
+             Consumer.start_link(TestConsumerTwo, queue: queue_name(), connection: meta.connection)
 
-    state = GenServer.call(consumer, :state)
+    assert_receive :init_callback
+  end
 
-    assert state.queue == "consumer_three"
+  test "consumer modules use handle_setup callback", meta do
+    Process.register(self(), :consumer_test)
+
+    defmodule TestConsumerThree do
+      use Rabbit.Consumer
+
+      @impl Rabbit.Consumer
+      def init(:consumer, opts) do
+        {:ok, opts}
+      end
+
+      @impl Rabbit.Consumer
+      def handle_setup(_channel, _queue) do
+        send(:consumer_test, :handle_setup_callback)
+        :ok
+      end
+
+      @impl Rabbit.Consumer
+      def handle_message(_msg), do: :ok
+
+      @impl Rabbit.Consumer
+      def handle_error(_msg), do: :ok
+    end
+
+    assert {:ok, consumer} =
+             Consumer.start_link(TestConsumerThree,
+               queue: queue_name(),
+               connection: meta.connection
+             )
+
+    assert_receive :handle_setup_callback
   end
 
   defp start_consumer(meta, opts \\ []) do

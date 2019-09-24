@@ -23,7 +23,8 @@ Please see [HexDocs](https://hexdocs.pm/rabbit) for additional documentation.
 
 ## [Connections](https://hexdocs.pm/rabbit/Rabbit.Connection.html)
 
-Create a connection module:
+Connections form the basis of any application that is working with RabbitMQ. A
+connection module is needed by all the other modules included with Rabbit.
 
 ```elixir
 defmodule MyConnection do
@@ -50,7 +51,12 @@ MyConnection.start_link()
 
 ## [Consumers](https://hexdocs.pm/rabbit/Rabbit.Consumer.html)
 
-Create a consumer module:
+Consumers are the "workers" of your application. They must be provided a connection
+module and queue to consume. Every message recieved is then passed along to your
+`handle_message/1` callback within its own process.
+
+You can optionally implement the `handle_setup/2` callback to perform any work
+needed to declare queues/exchanges/bindings.
 
 ```elixir
 defmodule MyConsumer do
@@ -70,7 +76,7 @@ defmodule MyConsumer do
 
   @impl Rabbit.Consumer
   def handle_setup(channel, queue) do
-    # Perform any exchange or queue setup
+    # Optional callback to perform any exchange or queue setup
     AMQP.Queue.declare(channel, queue)
     :ok
   end
@@ -94,7 +100,9 @@ MyConsumer.start_link(connection: MyConnection, queue: "my_queue", prefetch_coun
 
 ## [Consumer Supervisors](https://hexdocs.pm/rabbit/Rabbit.ConsumerSupervisor.html)
 
-Create a consumer supervisor module:
+Consumer supervisors provide an easy way to start and supervise multiple consumer
+processes. Rather than creating a module for each consumer and implementing
+repetitive logic - the same callbacks are used across all consumers.
 
 ```elixir
 defmodule MyConsumerSupervisor do
@@ -124,7 +132,7 @@ defmodule MyConsumerSupervisor do
 
   @impl Rabbit.ConsumerSupervisor
   def handle_setup(channel, queue) do
-    # Perform any exchange or queue setup per consumer
+    # Optional callback to perform any exchange or queue setup per consumer
     AMQP.Queue.declare(channel, queue)
     :ok
   end
@@ -148,7 +156,12 @@ MyConsumerSupervisor.start_link()
 
 ## [Producers](https://hexdocs.pm/rabbit/Rabbit.Producer.html)
 
-Create a producer module:
+In order to publish messages to RabbitMQ, we must create a producer module. They
+must be provided a connection module. The producer will then automatically create
+a pool of channels to publish from.
+
+You can optionally implement the `handle_setup/1` callback to perform any work
+needed to declare queues/exchanges/bindings.
 
 ```elixir
 defmodule MyProducer do
@@ -178,7 +191,12 @@ Rabbit.Producer.publish(MyProducer, "", "my_queue", "hello")
 
 ## [Initializers](https://hexdocs.pm/rabbit/Rabbit.Initializer.html)
 
-Create an initializer module:
+Initializers provide a way to centralize any RabbitMQ setup required by your 
+application. In that sense, it should be started BEFORE any of your producers
+or consumers.
+
+Using an initializer, you can automatically setup queues, exchanges and bindings
+with simple keyword lists.
 
 ```elixir
 defmodule MyInitializer do

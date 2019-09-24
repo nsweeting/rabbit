@@ -209,13 +209,17 @@ defmodule Rabbit.Consumer.Server do
   end
 
   defp handle_setup(state) do
-    case state.module.handle_setup(state.channel, state.queue) do
-      :ok ->
-        {:ok, state}
+    if function_exported?(state.module, :handle_setup, 2) do
+      case state.module.handle_setup(state.channel, state.queue) do
+        :ok ->
+          {:ok, state}
 
-      error ->
-        log_error(state, error)
-        {:error, state}
+        error ->
+          log_error(state, error)
+          {:error, state}
+      end
+    else
+      {:ok, state}
     end
   end
 

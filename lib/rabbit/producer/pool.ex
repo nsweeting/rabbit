@@ -1,9 +1,7 @@
 defmodule Rabbit.Producer.Pool do
   @moduledoc false
 
-  ################################
-  # Public API
-  ################################
+  alias Rabbit.Producer.Server
 
   @opts_schema %{
     pool_size: [type: :integer, required: true, default: 1],
@@ -13,6 +11,20 @@ defmodule Rabbit.Producer.Pool do
     :connection,
     :publish_opts
   ]
+
+  defmodule Worker do
+    @moduledoc false
+
+    @doc false
+    def start_link(opts) when is_list(opts) do
+      {module, opts} = Keyword.pop(opts, :module)
+      Server.start_link(module, opts)
+    end
+  end
+
+  ################################
+  # Public API
+  ################################
 
   @doc false
   def start_link(module, opts \\ [], server_opts \\ []) do
@@ -35,7 +47,7 @@ defmodule Rabbit.Producer.Pool do
 
   defp get_pool_opts(opts, server_opts) do
     [
-      {:worker_module, Rabbit.Producer.Server},
+      {:worker_module, Worker},
       {:size, Keyword.get(opts, :pool_size, 1)},
       {:max_overflow, Keyword.get(opts, :max_overflow, 0)}
     ]

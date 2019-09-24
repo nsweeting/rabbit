@@ -17,12 +17,6 @@ defmodule Rabbit.Producer.Server do
   ################################
 
   @doc false
-  def start_link(opts) when is_list(opts) do
-    {module, opts} = Keyword.pop(opts, :module)
-    start_link(module, opts)
-  end
-
-  @doc false
   def start_link(module, opts \\ [], server_opts \\ []) do
     GenServer.start_link(__MODULE__, {module, opts}, server_opts)
   end
@@ -36,7 +30,7 @@ defmodule Rabbit.Producer.Server do
   def init({module, opts}) do
     with {:ok, opts} <- module.init(:producer, opts),
          {:ok, opts} <- validate_opts(opts, @opts_schema) do
-      state = init_state(opts)
+      state = init_state(module, opts)
       {:ok, state, {:continue, :connection}}
     end
   end
@@ -52,6 +46,13 @@ defmodule Rabbit.Producer.Server do
 
   def handle_continue({:channel, connection}, state) do
     case channel(state, connection) do
+      {:ok, state} -> {:noreply, state, {:continue, :setup}}
+      {:error, state} -> {:noreply, state, {:continue, :restart_delay}}
+    end
+  end
+
+  def handle_continue(:setup, state) do
+    case handle_setup(state) do
       {:ok, state} -> {:noreply, state}
       {:error, state} -> {:noreply, state, {:continue, :restart_delay}}
     end
@@ -107,9 +108,10 @@ defmodule Rabbit.Producer.Server do
   # Private API
   ################################
 
-  defp init_state(opts) do
+  defp init_state(module, opts) do
     %{
       name: process_name(self()),
+      module: module,
       connection: Keyword.get(opts, :connection),
       publish_opts: Keyword.get(opts, :publish_opts),
       channel: nil,
@@ -145,6 +147,21 @@ defmodule Rabbit.Producer.Server do
 
   defp channel(state, _connection) do
     {:ok, state}
+  end
+
+  defp handle_setup(state) do
+    if function_exported?(state.module, :handle_setup, 1) do
+      case state.module.handle_setup(state.channel) do
+        :ok ->
+          {:ok, state}
+
+        error ->
+          log_error(state, error)
+          {:error, state}
+      end
+    else
+      {:ok, state}
+    end
   end
 
   defp disconnect(%{channel: nil} = state) do
