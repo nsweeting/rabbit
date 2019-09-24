@@ -82,7 +82,7 @@ defmodule Rabbit.ProducerTest do
     test "publishes payload to queue" do
       {:ok, amqp_conn} = AMQP.Connection.open()
       {:ok, amqp_chan} = AMQP.Channel.open(amqp_conn)
-      AMQP.Queue.declare(amqp_chan, "foo")
+      AMQP.Queue.declare(amqp_chan, "foo", auto_delete: true)
       AMQP.Queue.purge(amqp_chan, "foo")
 
       assert {:ok, connection} = Connection.start_link(TestConnection)
@@ -95,14 +95,15 @@ defmodule Rabbit.ProducerTest do
       :timer.sleep(50)
 
       assert 1 = AMQP.Queue.message_count(amqp_chan, "foo")
+
+      AMQP.Queue.purge(amqp_chan, "foo")
     end
   end
 
   test "will reconnect when connection stops" do
     {:ok, amqp_conn} = AMQP.Connection.open()
     {:ok, amqp_chan} = AMQP.Channel.open(amqp_conn)
-    AMQP.Queue.declare(amqp_chan, "producer")
-    AMQP.Queue.purge(amqp_chan, "producer")
+    AMQP.Queue.declare(amqp_chan, "foo", auto_delete: true)
 
     assert {:ok, connection} = Connection.start_link(TestConnection)
     assert {:ok, producer} = Producer.start_link(TestProducer, connection: connection)
@@ -111,7 +112,9 @@ defmodule Rabbit.ProducerTest do
     AMQP.Connection.close(state.connection)
     :timer.sleep(50)
 
-    assert :ok = Producer.publish(producer, "", "producer", "bar")
+    assert :ok = Producer.publish(producer, "", "foo", "bar")
+
+    AMQP.Queue.purge(amqp_chan, "foo")
   end
 
   test "producer modules use init callback" do
