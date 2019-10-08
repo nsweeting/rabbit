@@ -1,5 +1,5 @@
 defmodule Rabbit.ConsumerSupervisorTest do
-  use ExUnit.Case
+  use ExUnit.Case, async: false
 
   alias Rabbit.{Connection, ConsumerSupervisor}
 

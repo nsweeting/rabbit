@@ -1,5 +1,5 @@
 defmodule Rabbit.InitializerTest do
-  use ExUnit.Case
+  use ExUnit.Case, async: false
 
   alias Rabbit.{Connection, Consumer, Initializer, Producer}
 
