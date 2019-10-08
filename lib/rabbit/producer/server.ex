@@ -238,15 +238,13 @@ defmodule Rabbit.Producer.Server do
   defp publish(%{channel_open: false}, _msg), do: {:error, :not_connected}
 
   defp publish(state, {exchange, routing_key, payload, opts}) do
-    try do
-      opts = Keyword.merge(state.publish_opts, opts)
+    opts = Keyword.merge(state.publish_opts, opts)
 
-      with {:ok, payload} <- encode_payload(payload, opts) do
-        AMQP.Basic.publish(state.channel, exchange, routing_key, payload, opts)
-      end
-    catch
-      error -> {:error, error}
+    with {:ok, payload} <- encode_payload(payload, opts) do
+      AMQP.Basic.publish(state.channel, exchange, routing_key, payload, opts)
     end
+  catch
+    error -> {:error, error}
   end
 
   defp encode_payload(payload, opts) do
