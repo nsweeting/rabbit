@@ -43,7 +43,7 @@ defmodule Rabbit.Initializer.Server do
   @binding_opts [:routing_key, :no_wait, :arguments]
   @opts_schema %{
     connection: [type: [:tuple, :pid, :atom], required: true],
-    retry_sleep: [type: :integer, required: true, default: 100],
+    retry_delay: [type: :integer, required: true, default: 100],
     retry_max: [type: :integer, required: true, default: 25],
     exchanges: [type: {:list, {:keyword, @exchange_schema}}, required: true, default: []],
     queues: [type: {:list, {:keyword, @queue_schema}}, required: true, default: []],
@@ -99,7 +99,7 @@ defmodule Rabbit.Initializer.Server do
           success
 
         {:error, _} ->
-          :timer.sleep(state.retry_sleep)
+          :timer.sleep(state.retry_delay)
           connection(state, attempt + 1)
       end
     else
@@ -115,7 +115,7 @@ defmodule Rabbit.Initializer.Server do
           success
 
         {:error, _} ->
-          :timer.sleep(state.retry_sleep)
+          :timer.sleep(state.retry_delay)
           channel(state, connection, attempt + 1)
       end
     else

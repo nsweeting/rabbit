@@ -150,7 +150,9 @@ defmodule Rabbit.Consumer do
   * `{:reject, message}` - will reject the message.
   * `{:reject, message, options}` - will reject the message with options.
 
-  If you dont return one of these values - nothing will be done.
+  If you dont return one of these values - nothing will be done. This means you
+  will need to manually ack, nack or reject the message if required. Please
+  see the `Rabbit.Message` module for more information.
   """
   @callback handle_message(message :: Rabbit.Message.t()) ::
               {:ack, Rabbit.Message.t()}
@@ -223,46 +225,6 @@ defmodule Rabbit.Consumer do
   """
   def stop(consumer) do
     GenServer.stop(consumer, :normal)
-  end
-
-  @doc """
-  Awknowledges a message from its delivery tag.
-
-  ## Options
-
-    * `:multiple` -  If  `true`, all messages up to the one specified by `delivery_tag`
-      are considered acknowledged by the server.
-
-  """
-  def ack(consumer, delivery_tag, opts \\ []) do
-    GenServer.cast(consumer, {:ack, delivery_tag, opts})
-  end
-
-  @doc """
-  Negative awknowledges a message from its delivery tag.
-
-  ## Options
-
-    * `:multiple` -  If `true`, all messages up to the one specified by `delivery_tag`
-      are considered acknowledged by the server.
-    * `:requeue` - If `true`, the message will be returned to the queue and redelivered
-      to the next available consumer.
-
-  """
-  def nack(consumer, delivery_tag, opts \\ []) do
-    GenServer.cast(consumer, {:nack, delivery_tag, opts})
-  end
-
-  @doc """
-  Rejects a message from its delivery tag.
-
-  ## Options
-
-    * `:requeue` - If `true`, the message will be returned to the queue and redelivered
-      to the next available consumer.
-  """
-  def reject(consumer, delivery_tag, opts \\ []) do
-    GenServer.cast(consumer, {:reject, delivery_tag, opts})
   end
 
   defmacro __using__(opts) do

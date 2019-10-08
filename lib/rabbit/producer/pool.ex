@@ -4,11 +4,14 @@ defmodule Rabbit.Producer.Pool do
   alias Rabbit.Producer.Server
 
   @opts_schema %{
-    pool_size: [type: :integer, required: true, default: 1],
-    max_overflow: [type: :integer, required: true, default: 0]
+    pool_size: [type: :integer, default: 1, required: true],
+    max_overflow: [type: :integer, default: 0, required: true]
   }
   @worker_opts [
     :connection,
+    :sync_start,
+    :sync_start_delay,
+    :sync_start_max,
     :publish_opts
   ]
 

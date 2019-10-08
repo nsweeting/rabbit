@@ -75,6 +75,9 @@ defmodule Rabbit.Producer do
   @type t :: GenServer.name()
   @type option ::
           {:connection, Rabbit.Connection.t()}
+          | {:sync_start, boolean()}
+          | {:sync_start_delay, non_neg_integer()}
+          | {:sync_start_max, non_neg_integer()}
           | {:pool_size, non_neg_integer()}
           | {:max_overflow, non_neg_integer()}
           | {:publish_opts, publish_options()}
@@ -84,6 +87,9 @@ defmodule Rabbit.Producer do
   @type message :: term()
   @type producer_option ::
           {:connection, Rabbit.Connection.t()}
+          | {:sync_start, boolean()}
+          | {:sync_start_delay, non_neg_integer()}
+          | {:sync_start_max, non_neg_integer()}
           | {:publish_opts, publish_options()}
   @type producer_options :: [producer_option()]
   @type pool_option ::
@@ -169,6 +175,12 @@ defmodule Rabbit.Producer do
       Each process consumes a RabbitMQ channel.
     * `:max_overflow` - Maximum number of temporary workers created when the pool
       is empty - defaults to `0`.
+    * `:sync_start` - Boolean representing whether to establish the connection
+      and channel syncronously - defaults to `true`.
+    * `:sync_start_delay` - The amount of time in milliseconds to sleep between
+      sync start attempts - defaults to `50`.
+    * `:sync_start_max` - The max amount of sync start attempts that will occur
+      before proceeding with async start - defaults to `100`.
     * `:publish_opts` - Any `t:publish_option/0` that is automatically set as a
       default option value when calling `publish/6`.
 

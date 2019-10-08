@@ -56,6 +56,8 @@ defmodule Rabbit.Connection.Server do
   @doc false
   @impl GenServer
   def init({module, opts}) do
+    Process.flag(:trap_exit, true)
+
     with {:ok, opts} <- module.init(:connection, opts),
          {:ok, opts} <- validate_opts(opts, @opts_schema) do
       state = init_state(opts)
@@ -72,14 +74,6 @@ defmodule Rabbit.Connection.Server do
     end
   end
 
-  def handle_continue(:cleanup, %{connection: nil} = state) do
-    {:noreply, state, {:continue, :retry_delay}}
-  end
-
-  def handle_continue(:cleanup, state) do
-    {:noreply, state}
-  end
-
   def handle_continue(:retry_delay, state) do
     state = retry_delay(state)
     {:noreply, state}
@@ -87,13 +81,22 @@ defmodule Rabbit.Connection.Server do
 
   @doc false
   @impl GenServer
-  def handle_info({:DOWN, _ref, :process, pid, reason}, state) do
-    state = cleanup(state, pid, reason)
-    {:noreply, state, {:continue, :cleanup}}
-  end
-
   def handle_info(:reconnect, state) do
     {:noreply, state, {:continue, :connect}}
+  end
+
+  def handle_info({:DOWN, _ref, :process, pid, _reason}, state) do
+    state = remove_subscriber(state, pid)
+    {:noreply, state}
+  end
+
+  def handle_info({:EXIT, _pid, reason}, state) do
+    state = connection_down(state, reason)
+    {:noreply, state, {:continue, :retry_delay}}
+  end
+
+  def handle_info(_info, state) do
+    {:noreply, state}
   end
 
   @doc false
@@ -108,8 +111,7 @@ defmodule Rabbit.Connection.Server do
   end
 
   def handle_call(:alive?, _from, state) do
-    result = alive?(state)
-    {:reply, result, state}
+    {:reply, state.connection_open, state}
   end
 
   def handle_call({:subscribe, subscriber}, _from, state) do
@@ -131,7 +133,7 @@ defmodule Rabbit.Connection.Server do
       name: process_name(self()),
       connection_opts: Keyword.get(opts, :uri) || Keyword.take(opts, @connect_opts),
       connection: nil,
-      monitors: %{},
+      connection_open: false,
       subscribers: MapSet.new(),
       retry_attempts: 0,
       retry_backoff: Keyword.get(opts, :retry_backoff),
@@ -139,11 +141,13 @@ defmodule Rabbit.Connection.Server do
     }
   end
 
-  defp connect(%{connection: nil} = state) do
+  defp connect(%{connection_open: true} = state), do: {:ok, state}
+
+  defp connect(state) do
     case AMQP.Connection.open(state.connection_opts) do
       {:ok, connection} ->
-        state = %{state | connection: connection}
-        state = monitor(state, connection.pid, :connection)
+        Process.link(connection.pid)
+        state = %{state | connection: connection, connection_open: true}
         publish_connected(state, connection)
 
         {:ok, state}
@@ -154,51 +158,27 @@ defmodule Rabbit.Connection.Server do
     end
   end
 
-  defp connect(state) do
-    {:ok, state}
-  end
-
-  defp disconnect(%{connection: nil} = state) do
-    state
-  end
+  defp disconnect(%{connection_open: false} = state), do: state
 
   defp disconnect(%{connection: connection} = state) do
     if Process.alive?(connection.pid), do: AMQP.Connection.close(connection)
     publish_disconnected(state, :stopped)
-    %{state | connection: nil}
+    remove_connection(state)
   end
 
-  defp fetch(%{connection: nil}), do: {:error, :not_connected}
+  defp fetch(%{connection_open: false}), do: {:error, :not_connected}
   defp fetch(state), do: {:ok, state.connection}
 
-  defp alive?(%{connection: nil}), do: false
-  defp alive?(_state), do: true
+  defp connection_down(%{connection_open: false} = state, _reason), do: state
 
-  defp monitor(state, pid, type) do
-    if Map.has_key?(state.monitors, pid) do
-      state
-    else
-      Process.monitor(pid)
-      %{state | monitors: Map.put(state.monitors, pid, type)}
-    end
+  defp connection_down(state, reason) do
+    log_error(state, reason)
+    publish_disconnected(state, reason)
+    remove_connection(state)
   end
 
-  defp cleanup(state, pid, reason) do
-    state =
-      case Map.get(state.monitors, pid) do
-        :connection ->
-          log_error(state, reason)
-          publish_disconnected(state, reason)
-          %{state | retry_attempts: 0, connection: nil}
-
-        :subscriber ->
-          %{state | subscribers: MapSet.delete(state.subscribers, pid)}
-
-        _ ->
-          state
-      end
-
-    %{state | monitors: Map.delete(state.monitors, pid)}
+  defp remove_subscriber(state, pid) do
+    %{state | subscribers: MapSet.delete(state.subscribers, pid)}
   end
 
   defp retry_delay(state) do
@@ -217,14 +197,21 @@ defmodule Rabbit.Connection.Server do
     end
   end
 
-  defp subscribe(%{connection: nil} = state, subscriber) do
-    state = monitor(state, subscriber, :subscriber)
-    %{state | subscribers: MapSet.put(state.subscribers, subscriber)}
+  defp subscribe(%{connection_open: false} = state, subscriber) do
+    add_subscriber(state, subscriber)
   end
 
   defp subscribe(state, subscriber) do
-    state = monitor(state, subscriber, :subscriber)
+    state = add_subscriber(state, subscriber)
     publish_connected([subscriber], state.connection)
+    state
+  end
+
+  defp add_subscriber(state, subscriber) do
+    if !MapSet.member?(state.subscribers, subscriber) do
+      Process.monitor(subscriber)
+    end
+
     %{state | subscribers: MapSet.put(state.subscribers, subscriber)}
   end
 
@@ -246,6 +233,10 @@ defmodule Rabbit.Connection.Server do
     end
 
     :ok
+  end
+
+  defp remove_connection(state) do
+    %{state | connection: nil, connection_open: false, retry_attempts: 0}
   end
 
   defp log_error(state, error) do

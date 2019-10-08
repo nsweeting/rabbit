@@ -7,6 +7,8 @@ defmodule Rabbit.Worker.Executer do
 
   require Logger
 
+  alias Rabbit.Message
+
   @opts_schema %{
     timeout: [type: :integer, default: 60_000]
   }
@@ -123,16 +125,12 @@ defmodule Rabbit.Worker.Executer do
     |> handle_result()
   end
 
-  defp consumer_action(message, action, opts) do
-    apply(Rabbit.Consumer, action, [message.consumer, message.meta.delivery_tag, opts])
-  end
-
-  defp handle_result({:ack, message}), do: consumer_action(message, :ack, [])
-  defp handle_result({:ack, message, opts}), do: consumer_action(message, :ack, opts)
-  defp handle_result({:nack, message}), do: consumer_action(message, :nack, [])
-  defp handle_result({:nack, message, opts}), do: consumer_action(message, :nack, opts)
-  defp handle_result({:reject, message}), do: consumer_action(message, :reject, [])
-  defp handle_result({:reject, message, opts}), do: consumer_action(message, :reject, opts)
+  defp handle_result({:ack, message}), do: Message.ack(message)
+  defp handle_result({:ack, message, opts}), do: Message.ack(message, opts)
+  defp handle_result({:nack, message}), do: Message.nack(message)
+  defp handle_result({:nack, message, opts}), do: Message.nack(message, opts)
+  defp handle_result({:reject, message}), do: Message.reject(message)
+  defp handle_result({:reject, message, opts}), do: Message.reject(message, opts)
   defp handle_result(other), do: other
 
   defp handle_error(state, reason, stack) do
