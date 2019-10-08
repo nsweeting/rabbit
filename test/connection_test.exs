@@ -1,5 +1,5 @@
 defmodule Rabbit.ConnectionTest do
-  use ExUnit.Case
+  use ExUnit.Case, async: false
 
   alias Rabbit.Connection
 
@@ -71,7 +71,6 @@ defmodule Rabbit.ConnectionTest do
       refute MapSet.member?(state.subscribers, self())
 
       Connection.subscribe(connection)
-
       state = GenServer.call(connection, :state)
 
       assert MapSet.member?(state.subscribers, self())
@@ -87,25 +86,6 @@ defmodule Rabbit.ConnectionTest do
 
     assert_receive {:disconnected, {:shutdown, :normal}}
     assert_receive {:connected, %AMQP.Connection{}}
-  end
-
-  test "removes dead monitors" do
-    assert {:ok, connection} = Connection.start_link(TestConnection)
-
-    task =
-      Task.async(fn ->
-        subscriber = self()
-        Connection.subscribe(connection, subscriber)
-        state = GenServer.call(connection, :state)
-
-        assert :subscriber = Map.get(state.monitors, subscriber)
-      end)
-
-    Task.await(task)
-    :timer.sleep(50)
-    state = GenServer.call(connection, :state)
-
-    refute Map.has_key?(state.monitors, task.pid)
   end
 
   test "removes dead subscribers" do

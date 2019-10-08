@@ -55,6 +55,47 @@ defmodule Rabbit.Message do
     }
   end
 
+  @doc """
+  Awknowledges a message.
+
+  ## Options
+
+    * `:multiple` -  If  `true`, all messages up to the one specified by its
+    `delivery_tag` are considered acknowledged by the server.
+  """
+  @spec ack(Rabbit.Message.t(), keyword()) :: :ok | {:error, :blocked | :closing}
+  def ack(message, opts \\ []) do
+    AMQP.Basic.ack(message.channel, message.meta.delivery_tag, opts)
+  end
+
+  @doc """
+  Negative awknowledges a message.
+
+  ## Options
+
+    * `:multiple` -  If `true`, all messages up to the one specified by it
+    `delivery_tag` are considered acknowledged by the server.
+    * `:requeue` - If `true`, the message will be returned to the queue and redelivered
+      to the next available consumer.
+  """
+  @spec nack(Rabbit.Message.t(), keyword()) :: :ok | {:error, :blocked | :closing}
+  def nack(message, opts \\ []) do
+    AMQP.Basic.nack(message.channel, message.meta.delivery_tag, opts)
+  end
+
+  @doc """
+  Rejects a message.
+
+  ## Options
+
+    * `:requeue` - If `true`, the message will be returned to the queue and redelivered
+      to the next available consumer.
+  """
+  @spec reject(Rabbit.Message.t(), keyword()) :: :ok | {:error, :blocked | :closing}
+  def reject(message, opts \\ []) do
+    AMQP.Basic.reject(message.channel, message.meta.delivery_tag, opts)
+  end
+
   @doc false
   @spec put_error(Rabbit.Message.t(), any(), list()) :: Rabbit.Message.t()
   def put_error(message, reason, stack) do

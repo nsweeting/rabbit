@@ -2,13 +2,13 @@ defmodule Rabbit.Initializer do
   @moduledoc """
   A RabbitMQ initializer process.
 
-  This is a blocking process that can be used to declare exchanges, queues, and bindings.
-  It will perform any setup required by your application. It should be added to
-  your supervision tree before any producers or consumers.
+  This is a blocking process that can be used to declare exchanges, queues, and
+  bindings. It will perform any setup required by your application. It should be
+  added to your supervision tree before any producers or consumers.
 
   Both `Rabbit.Consumer` and `Rabbit.ConsumerSupervisor` have the `handle_setup/2`
-  callback, which can be used to perform any queue, exchange or binding work as well.
-  But if you have more complex requirements, this module can be used.
+  callback, which can be used to perform any queue, exchange or binding work as
+  well. But if you have more complex requirements, this module can be used.
 
   ## Example
 

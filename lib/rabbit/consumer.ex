@@ -2,7 +2,8 @@ defmodule Rabbit.Consumer do
   @moduledoc """
   A RabbitMQ consumer process.
 
-  This wraps around the standard `AMQP.Channel`. It provides the following benefits:
+  Consumers are the "workers" of your application. They wrap around the standard
+  `AMQP.Channel` and provide the following benefits:
 
   * Durability during connection and channel failures through use of expotential backoff.
   * Easy runtime setup through the `c:init/2` and `c:handle_setup/2` callbacks.
@@ -49,7 +50,7 @@ defmodule Rabbit.Consumer do
 
         @impl Rabbit.Consumer
         def handle_setup(channel, queue) do
-          # Perform exchange or queue setup
+          # Optional callback to perform exchange or queue setup
           AMQP.Queue.declare(channel, queue)
 
           :ok
@@ -113,13 +114,13 @@ defmodule Rabbit.Consumer do
   @callback init(:consumer, options()) :: {:ok, options()} | :ignore
 
   @doc """
-  A callback executed after the channel is open, but before consumption.
+  An optional callback executed after the channel is open, but before consumption.
 
   The callback is called with an `AMQP.Channel`, as well as the queue that will
-  be consumed. At the most basic, you will most likely want to declare the queue
-  to ensure its available. This will be entirely application dependent though.
+  be consumed. At the most basic, you may want to declare the queue to ensure
+  its available. This will be entirely application dependent though.
 
-      def after_connect(channel, queue) do
+      def handle_setup(channel, queue) do
         AMQP.Queue.declare(channel, queue)
 
         :ok
@@ -127,13 +128,16 @@ defmodule Rabbit.Consumer do
 
   The callback must return an `:ok` atom - otherise it will be marked as failed,
   and the consumer will attempt to go through the connection setup process again.
+
+  Alternatively, you could use a `Rabbit.Initializer` process to perform this
+  setup work. Please see its docs for more information.
   """
-  @callback handle_setup(channel :: AMQP.Channel.t(), queue :: String.t()) :: :ok
+  @callback handle_setup(channel :: AMQP.Channel.t(), queue :: String.t()) :: :ok | :error
 
   @doc """
   A callback executed to handle message consumption.
 
-  The callback is called with a `Rabbit.Message` struct. You may find more information
+  The callback is provided a `Rabbit.Message` struct. You may find more information
   about the message structure within its own documentation. The message may be
   automatically decoded based on the content type and available serializers.
 
@@ -146,7 +150,9 @@ defmodule Rabbit.Consumer do
   * `{:reject, message}` - will reject the message.
   * `{:reject, message, options}` - will reject the message with options.
 
-  If you dont return one of these values - nothing will be done.
+  If you dont return one of these values - nothing will be done. This means you
+  will need to manually ack, nack or reject the message if required. Please
+  see the `Rabbit.Message` module for more information.
   """
   @callback handle_message(message :: Rabbit.Message.t()) ::
               {:ack, Rabbit.Message.t()}
@@ -174,6 +180,8 @@ defmodule Rabbit.Consumer do
               | {:reject, Rabbit.Message.t()}
               | {:reject, Rabbit.Message.t(), action_options()}
               | any()
+
+  @optional_callbacks handle_setup: 2
 
   ################################
   # Public API
@@ -217,46 +225,6 @@ defmodule Rabbit.Consumer do
   """
   def stop(consumer) do
     GenServer.stop(consumer, :normal)
-  end
-
-  @doc """
-  Awknowledges a message from its delivery tag.
-
-  ## Options
-
-    * `:multiple` -  If  `true`, all messages up to the one specified by `delivery_tag`
-      are considered acknowledged by the server.
-
-  """
-  def ack(consumer, delivery_tag, opts \\ []) do
-    GenServer.cast(consumer, {:ack, delivery_tag, opts})
-  end
-
-  @doc """
-  Negative awknowledges a message from its delivery tag.
-
-  ## Options
-
-    * `:multiple` -  If `true`, all messages up to the one specified by `delivery_tag`
-      are considered acknowledged by the server.
-    * `:requeue` - If `true`, the message will be returned to the queue and redelivered
-      to the next available consumer.
-
-  """
-  def nack(consumer, delivery_tag, opts \\ []) do
-    GenServer.cast(consumer, {:nack, delivery_tag, opts})
-  end
-
-  @doc """
-  Rejects a message from its delivery tag.
-
-  ## Options
-
-    * `:requeue` - If `true`, the message will be returned to the queue and redelivered
-      to the next available consumer.
-  """
-  def reject(consumer, delivery_tag, opts \\ []) do
-    GenServer.cast(consumer, {:reject, delivery_tag, opts})
   end
 
   defmacro __using__(opts) do

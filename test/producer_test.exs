@@ -1,5 +1,5 @@
 defmodule Rabbit.ProducerTest do
-  use ExUnit.Case
+  use ExUnit.Case, async: false
 
   alias Rabbit.{Connection, Producer}
 
@@ -82,7 +82,7 @@ defmodule Rabbit.ProducerTest do
     test "publishes payload to queue" do
       {:ok, amqp_conn} = AMQP.Connection.open()
       {:ok, amqp_chan} = AMQP.Channel.open(amqp_conn)
-      AMQP.Queue.declare(amqp_chan, "foo")
+      AMQP.Queue.declare(amqp_chan, "foo", auto_delete: true)
       AMQP.Queue.purge(amqp_chan, "foo")
 
       assert {:ok, connection} = Connection.start_link(TestConnection)
@@ -95,14 +95,15 @@ defmodule Rabbit.ProducerTest do
       :timer.sleep(50)
 
       assert 1 = AMQP.Queue.message_count(amqp_chan, "foo")
+
+      AMQP.Queue.purge(amqp_chan, "foo")
     end
   end
 
   test "will reconnect when connection stops" do
     {:ok, amqp_conn} = AMQP.Connection.open()
     {:ok, amqp_chan} = AMQP.Channel.open(amqp_conn)
-    AMQP.Queue.declare(amqp_chan, "producer")
-    AMQP.Queue.purge(amqp_chan, "producer")
+    AMQP.Queue.declare(amqp_chan, "foo", auto_delete: true)
 
     assert {:ok, connection} = Connection.start_link(TestConnection)
     assert {:ok, producer} = Producer.start_link(TestProducer, connection: connection)
@@ -111,7 +112,9 @@ defmodule Rabbit.ProducerTest do
     AMQP.Connection.close(state.connection)
     :timer.sleep(50)
 
-    assert :ok = Producer.publish(producer, "", "producer", "bar")
+    assert :ok = Producer.publish(producer, "", "foo", "bar")
+
+    AMQP.Queue.purge(amqp_chan, "foo")
   end
 
   test "producer modules use init callback" do
@@ -130,6 +133,29 @@ defmodule Rabbit.ProducerTest do
     assert {:ok, connection} = Connection.start_link(TestConnection)
     assert {:ok, producer} = Producer.start_link(TestProducerTwo, connection: connection)
     assert_receive :init_callback
+  end
+
+  test "producer modules use handle_setup callback" do
+    Process.register(self(), :producer_test)
+
+    defmodule TestProducerThree do
+      use Rabbit.Producer
+
+      @impl Rabbit.Producer
+      def init(_type, opts) do
+        {:ok, opts}
+      end
+
+      @impl Rabbit.Producer
+      def handle_setup(_channel) do
+        send(:producer_test, :handle_setup_callback)
+        :ok
+      end
+    end
+
+    assert {:ok, connection} = Connection.start_link(TestConnection)
+    assert {:ok, producer} = Producer.start_link(TestProducerThree, connection: connection)
+    assert_receive :handle_setup_callback
   end
 
   def await_publishing(producer) do

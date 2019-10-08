@@ -54,6 +54,8 @@ defmodule Rabbit.Consumer.Server do
   @doc false
   @impl GenServer
   def init({module, opts}) do
+    Process.flag(:trap_exit, true)
+
     with {:ok, opts} <- module.init(:consumer, opts),
          {:ok, opts} <- validate_opts(opts, @opts_schema) do
       state = init_state(module, opts)
@@ -131,25 +133,12 @@ defmodule Rabbit.Consumer.Server do
     {:noreply, state, {:continue, :after_connect}}
   end
 
-  def handle_info({:DOWN, _ref, :process, _pid, reason}, state) do
+  def handle_info({:EXIT, _pid, reason}, state) do
     state = channel_down(state, reason)
     {:noreply, state, {:continue, :restart_delay}}
   end
 
-  @doc false
-  @impl GenServer
-  def handle_cast({:ack, delivery_tag, opts}, state) do
-    AMQP.Basic.ack(state.channel, delivery_tag, opts)
-    {:noreply, state}
-  end
-
-  def handle_cast({:nack, delivery_tag, opts}, state) do
-    AMQP.Basic.nack(state.channel, delivery_tag, opts)
-    {:noreply, state}
-  end
-
-  def handle_cast({:reject, delivery_tag, opts}, state) do
-    AMQP.Basic.reject(state.channel, delivery_tag, opts)
+  def handle_info(_info, state) do
     {:noreply, state}
   end
 
@@ -167,7 +156,10 @@ defmodule Rabbit.Consumer.Server do
       name: process_name(self()),
       module: module,
       connection: Keyword.get(opts, :connection),
+      connection_subscribed: false,
       channel: nil,
+      channel_open: false,
+      setup_run: false,
       consuming: false,
       consumer_tag: nil,
       restart_attempts: 0,
@@ -178,8 +170,11 @@ defmodule Rabbit.Consumer.Server do
     }
   end
 
+  defp connection(%{connection_subscribed: true} = state), do: {:ok, state}
+
   defp connection(state) do
     Rabbit.Connection.subscribe(state.connection, self())
+    state = %{state | connection_subscribed: true}
     {:ok, state}
   rescue
     error ->
@@ -191,11 +186,13 @@ defmodule Rabbit.Consumer.Server do
       {:error, state}
   end
 
-  defp channel(%{channel: nil} = state, connection) do
+  defp channel(%{channel_open: true} = state, _connection), do: {:ok, state}
+
+  defp channel(state, connection) do
     case AMQP.Channel.open(connection) do
       {:ok, channel} ->
-        Process.monitor(channel.pid)
-        state = %{state | channel: channel}
+        Process.link(channel.pid)
+        state = %{state | channel: channel, channel_open: true}
         {:ok, state}
 
       error ->
@@ -204,29 +201,35 @@ defmodule Rabbit.Consumer.Server do
     end
   end
 
-  defp channel(state, _connection) do
-    {:ok, state}
-  end
+  defp handle_setup(%{setup_run: true} = state), do: {:ok, state}
 
   defp handle_setup(state) do
-    case state.module.handle_setup(state.channel, state.queue) do
-      :ok ->
-        {:ok, state}
+    if function_exported?(state.module, :handle_setup, 2) do
+      case state.module.handle_setup(state.channel, state.queue) do
+        :ok ->
+          state = %{state | setup_run: true}
+          {:ok, state}
 
-      error ->
-        log_error(state, error)
-        {:error, state}
+        error ->
+          log_error(state, error)
+          {:error, state}
+      end
+    else
+      {:ok, state}
     end
   end
+
+  defp consume(%{consuming: true} = state), do: {:ok, state}
 
   defp consume(state) do
     with :ok <- AMQP.Basic.qos(state.channel, state.qos_opts),
          {:ok, tag} <- AMQP.Basic.consume(state.channel, state.queue, self(), state.consume_opts) do
       Logger.info("""
-      [Rabbit.Consumer] #{inspect(state.name)}: consumer started.
+      [Rabbit.Consumer] #{inspect(state.name)}: consumer #{tag} started.
       """)
 
-      {:ok, %{state | consuming: true, consumer_tag: tag}}
+      state = %{state | consuming: true, consumer_tag: tag}
+      {:ok, state}
     else
       error ->
         log_error(state, error)
@@ -234,13 +237,11 @@ defmodule Rabbit.Consumer.Server do
     end
   end
 
-  defp disconnect(%{channel: nil} = state) do
-    state
-  end
+  defp disconnect(%{channel_open: false} = state), do: state
 
   defp disconnect(%{channel: channel} = state) do
     if Process.alive?(channel.pid), do: AMQP.Channel.close(channel)
-    %{state | channel: nil, consuming: false, consumer_tag: nil}
+    remove_channel(state)
   end
 
   defp restart_delay(state) do
@@ -250,13 +251,11 @@ defmodule Rabbit.Consumer.Server do
     %{state | restart_attempts: restart_attempts}
   end
 
-  defp channel_down(%{channel: nil} = state, _reason) do
-    state
-  end
+  defp channel_down(%{channel_open: false} = state, _reason), do: state
 
   defp channel_down(state, reason) do
     log_error(state, reason)
-    %{state | restart_attempts: 0, channel: nil, consuming: false, consumer_tag: nil}
+    remove_channel(state)
   end
 
   defp calculate_delay(attempt) when attempt > 5 do
@@ -270,6 +269,19 @@ defmodule Rabbit.Consumer.Server do
   defp handle_message(state, payload, meta) do
     message = Rabbit.Message.new(state.name, state.module, state.channel, payload, meta)
     Rabbit.Worker.start_child(message, state.worker_opts)
+  end
+
+  defp remove_channel(state) do
+    %{
+      state
+      | restart_attempts: 0,
+        connection_subscribed: false,
+        channel: nil,
+        channel_open: false,
+        consuming: false,
+        consumer_tag: nil,
+        setup_run: false
+    }
   end
 
   defp log_error(state, error) do

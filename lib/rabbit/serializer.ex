@@ -33,7 +33,7 @@ defmodule Rabbit.Serializer do
   * `"application/etf"` - built in erlang term format.
   * `"application/json"` - requires the `Jason` library to be added.
 
-  You can modify the default serializers through application config:
+  You can modify the available serializers through application config:
 
         config :rabbit,
           serializers: %{

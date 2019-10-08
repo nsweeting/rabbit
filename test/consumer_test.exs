@@ -1,5 +1,5 @@
 defmodule Rabbit.ConsumerTest do
-  use ExUnit.Case
+  use ExUnit.Case, async: false
 
   alias Rabbit.{Connection, Consumer, Producer}
 
@@ -26,11 +26,13 @@ defmodule Rabbit.ConsumerTest do
 
     @impl Rabbit.Consumer
     def init(:consumer, opts) do
+      send(:consumer_test, :init_callback)
       {:ok, opts}
     end
 
     @impl Rabbit.Consumer
     def handle_setup(chan, queue) do
+      send(:consumer_test, :handle_setup_callback)
       AMQP.Queue.declare(chan, queue, auto_delete: true)
       AMQP.Queue.purge(chan, queue)
 
@@ -40,9 +42,9 @@ defmodule Rabbit.ConsumerTest do
     @impl Rabbit.Consumer
     def handle_message(msg) do
       decoded_payload = Base.decode64!(msg.payload)
-      {pid, ref} = :erlang.binary_to_term(decoded_payload)
+      {pid, ref, return} = :erlang.binary_to_term(decoded_payload)
       send(pid, {:handle_message, ref})
-      :ok
+      {return, msg}
     end
 
     @impl Rabbit.Consumer
@@ -52,6 +54,7 @@ defmodule Rabbit.ConsumerTest do
   end
 
   setup do
+    Process.register(self(), :consumer_test)
     {:ok, connection} = Connection.start_link(TestConnection)
     {:ok, producer} = Producer.start_link(TestProducer, connection: connection)
     %{connection: connection, producer: producer}
@@ -122,37 +125,33 @@ defmodule Rabbit.ConsumerTest do
   end
 
   test "consumer modules use init callback", meta do
-    defmodule TestConsumerTwo do
-      use Rabbit.Consumer
+    assert {:ok, _, _} = start_consumer(meta)
+    assert_receive :init_callback
+  end
 
-      def init(:consumer, opts) do
-        opts = Keyword.put(opts, :queue, "consumer_three")
-        {:ok, opts}
-      end
+  test "consumer modules use handle_setup callback", meta do
+    assert {:ok, _, _} = start_consumer(meta)
+    assert_receive :handle_setup_callback
+  end
 
-      def handle_setup(chan, queue) do
-        AMQP.Queue.declare(chan, queue, auto_delete: true)
-        AMQP.Queue.purge(chan, queue)
+  test "will ack messages based on return value", meta do
+    state = GenServer.call(meta.connection, :state)
+    {:ok, channel} = AMQP.Channel.open(state.connection)
+    queue = queue_name()
+    AMQP.Queue.declare(channel, queue, auto_delete: true)
 
-        :ok
-      end
+    assert AMQP.Queue.message_count(channel, queue) == 0
 
-      def handle_message(_msg), do: :ok
+    publish_message(meta, queue, msg: :ack)
+    :timer.sleep(50)
 
-      def handle_error(_msg), do: :ok
-    end
-
-    assert {:ok, consumer} = Consumer.start_link(TestConsumerTwo, connection: meta.connection)
-    assert true = Process.alive?(consumer)
-    assert :ok = await_consuming(consumer)
-
-    state = GenServer.call(consumer, :state)
-
-    assert state.queue == "consumer_three"
+    assert AMQP.Queue.message_count(channel, queue) == 1
+    assert {:ok, consumer, queue} = start_consumer(meta, queue: queue)
+    assert AMQP.Queue.message_count(channel, queue) == 0
   end
 
   defp start_consumer(meta, opts \\ []) do
-    queue = queue_name()
+    queue = Keyword.get(opts, :queue, queue_name())
     opts = [connection: meta.connection, queue: queue] ++ opts
     {:ok, consumer} = Consumer.start_link(TestConsumer, opts)
     await_consuming(consumer)
@@ -161,7 +160,7 @@ defmodule Rabbit.ConsumerTest do
 
   defp publish_message(meta, queue, opts \\ []) do
     signature = make_ref()
-    message = {self(), signature}
+    message = {self(), signature, Keyword.get(opts, :msg)}
     encoded_message = message |> :erlang.term_to_binary() |> Base.encode64()
     Producer.publish(meta.producer, "", queue, encoded_message, opts)
     signature
