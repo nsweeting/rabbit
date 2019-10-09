@@ -208,9 +208,15 @@ defmodule Rabbit.Producer.Server do
 
   defp disconnect(%{channel_open: false} = state), do: state
 
-  defp disconnect(%{channel: channel} = state) do
-    if Process.alive?(channel.pid), do: AMQP.Channel.close(channel)
+  defp disconnect(state) do
+    close_channel(state)
     remove_channel(state)
+  end
+
+  defp close_channel(%{channel: channel}) do
+    if Process.alive?(channel.pid), do: AMQP.Channel.close(channel)
+  catch
+    _, _ -> :ok
   end
 
   defp restart_delay(state) do
@@ -221,19 +227,15 @@ defmodule Rabbit.Producer.Server do
   end
 
   defp channel_down(%{channel_open: false} = state, _reason), do: state
+  defp channel_down(state, :normal), do: remove_channel(state)
 
   defp channel_down(state, reason) do
     log_error(state, reason)
     remove_channel(state)
   end
 
-  defp calculate_delay(attempt) when attempt > 5 do
-    5_000
-  end
-
-  defp calculate_delay(attempt) do
-    1000 * attempt
-  end
+  defp calculate_delay(attempt) when attempt > 5, do: 5_000
+  defp calculate_delay(attempt), do: 1000 * attempt
 
   defp publish(%{channel_open: false}, _msg), do: {:error, :not_connected}
 
