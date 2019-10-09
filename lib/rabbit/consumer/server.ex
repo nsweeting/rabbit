@@ -239,9 +239,15 @@ defmodule Rabbit.Consumer.Server do
 
   defp disconnect(%{channel_open: false} = state), do: state
 
-  defp disconnect(%{channel: channel} = state) do
-    if Process.alive?(channel.pid), do: AMQP.Channel.close(channel)
+  defp disconnect(state) do
+    close_channel(state)
     remove_channel(state)
+  end
+
+  defp close_channel(%{channel: channel}) do
+    if Process.alive?(channel.pid), do: AMQP.Channel.close(channel)
+  catch
+    _, _ -> :ok
   end
 
   defp restart_delay(state) do

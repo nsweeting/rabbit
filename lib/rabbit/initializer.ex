@@ -133,7 +133,7 @@ defmodule Rabbit.Initializer do
     * `:exchanges` - A list of exchanges to declare. Please see [Exchanges](#start_link/3-exchanges).
     * `:queues` - A list of queues to declare. Please see [Queues](#start_link/3-queues).
     * `:bindings` - A list of bindings to declare. Please see [Bindings](#start_link/3-bindings).
-    * `:retry_sleep` - The amount of time in milliseconds to sleep between attempts
+    * `:retry_delay` - The amount of time in milliseconds to delay between attempts
       to fetch a connection from the connection process - defaults to `100`.
     * `:retry_max` - The max amount of connection retries that will be attempted before
       returning an error - defaults to `25`.
