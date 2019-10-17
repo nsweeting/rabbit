@@ -52,10 +52,8 @@ defmodule Rabbit.Connection do
   alias Rabbit.Connection
 
   @type t :: GenServer.name()
-  @type uri :: String.t()
   @type option ::
-          {:module, module()}
-          | {:uri, String.t()}
+          {:uri, String.t()}
           | {:username, String.t()}
           | {:password, String.t()}
           | {:virtual_host, String.t()}
@@ -69,7 +67,7 @@ defmodule Rabbit.Connection do
           | {:socket_options, Keyword.t()}
           | {:retry_backoff, non_neg_integer()}
           | {:retry_max_delay, non_neg_integer()}
-  @type options :: uri() | [option()]
+  @type options :: [option()]
 
   @doc """
   A callback executed when the connection is started.
