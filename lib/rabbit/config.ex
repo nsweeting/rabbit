@@ -67,7 +67,7 @@ defmodule Rabbit.Config do
       :ets.new(@table, [:named_table, :protected, read_concurrency: true])
     end
 
-    do_put(opts)
+    for {key, val} <- opts, do: do_insert(key, val)
 
     :ok
   end
@@ -91,18 +91,18 @@ defmodule Rabbit.Config do
   defp validate_key(:worker_pool_size, size) when size < 1, do: ["must be greater than 0"]
   defp validate_key(_key, _val), do: []
 
-  defp do_put(opts) when is_list(opts) do
-    for {key, val} <- opts, do: do_put(key, val)
-  end
-
   defp do_put(key, val) do
     with true <- Map.has_key?(opts_schema(), key),
          [] <- validate_key(key, val) do
-      :ets.insert(@table, {key, val})
-      :ok
+      do_insert(key, val)
     else
       false -> {:error, :invalid_key}
       errors -> {:error, errors}
     end
+  end
+
+  defp do_insert(key, val) do
+    :ets.insert(@table, {key, val})
+    :ok
   end
 end
