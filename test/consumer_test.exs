@@ -26,16 +26,15 @@ defmodule Rabbit.ConsumerTest do
 
     @impl Rabbit.Consumer
     def init(:consumer, opts) do
-      send(:consumer_test, :init_callback)
+      if is_pid(Process.whereis(:consumer_test)), do: send(:consumer_test, :init_callback)
       {:ok, opts}
     end
 
     @impl Rabbit.Consumer
     def handle_setup(chan, queue) do
-      send(:consumer_test, :handle_setup_callback)
+      if is_pid(Process.whereis(:consumer_test)), do: send(:consumer_test, :handle_setup_callback)
       AMQP.Queue.declare(chan, queue, auto_delete: true)
       AMQP.Queue.purge(chan, queue)
-
       :ok
     end
 
@@ -54,7 +53,6 @@ defmodule Rabbit.ConsumerTest do
   end
 
   setup do
-    Process.register(self(), :consumer_test)
     {:ok, connection} = Connection.start_link(TestConnection)
     {:ok, producer} = Producer.start_link(TestProducer, connection: connection)
     %{connection: connection, producer: producer}
@@ -125,11 +123,13 @@ defmodule Rabbit.ConsumerTest do
   end
 
   test "consumer modules use init callback", meta do
+    Process.register(self(), :consumer_test)
     assert {:ok, _, _} = start_consumer(meta)
     assert_receive :init_callback
   end
 
   test "consumer modules use handle_setup callback", meta do
+    Process.register(self(), :consumer_test)
     assert {:ok, _, _} = start_consumer(meta)
     assert_receive :handle_setup_callback
   end
