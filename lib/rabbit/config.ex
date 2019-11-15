@@ -74,21 +74,35 @@ defmodule Rabbit.Config do
 
   defp opts_schema do
     %{
-      worker_pool_size: [type: :integer, default: System.schedulers_online(), required: true],
-      serializers: [type: :map, default: Rabbit.Serializer.defaults(), required: true]
+      worker_pool_size: [
+        type: :integer,
+        default: System.schedulers_online(),
+        required: true,
+        custom: [&validate_key(&1, &2)]
+      ],
+      serializers: [
+        type: :map,
+        default: Rabbit.Serializer.defaults(),
+        required: true
+      ]
     }
   end
+
+  defp validate_key(:worker_pool_size, size) when size < 1, do: ["must be greater than 0"]
+  defp validate_key(_key, _val), do: []
 
   defp do_put(opts) when is_list(opts) do
     for {key, val} <- opts, do: do_put(key, val)
   end
 
   defp do_put(key, val) do
-    if Map.has_key?(opts_schema(), key) do
+    with true <- Map.has_key?(opts_schema(), key),
+         [] <- validate_key(key, val) do
       :ets.insert(@table, {key, val})
       :ok
     else
-      {:error, :invalid_key}
+      false -> {:error, :invalid_key}
+      errors -> {:error, errors}
     end
   end
 end
