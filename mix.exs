@@ -1,7 +1,7 @@
 defmodule Rabbit.MixProject do
   use Mix.Project
 
-  @version "0.6.3"
+  @version "0.7.0"
 
   def project do
     [
@@ -27,7 +27,7 @@ defmodule Rabbit.MixProject do
 
   defp description do
     """
-    A set of tools for building applications with RabbitMQ.
+    A set of tools for building robust applications with RabbitMQ.
     """
   end
 

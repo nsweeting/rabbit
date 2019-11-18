@@ -8,6 +8,7 @@ defmodule Rabbit.Connection.Server do
   require Logger
 
   @opts_schema %{
+    name: [type: :binary, required: false],
     uri: [type: :binary, required: false],
     username: [type: :binary, default: "guest", required: false],
     password: [type: :binary, default: "guest", required: false],
@@ -25,7 +26,7 @@ defmodule Rabbit.Connection.Server do
     retry_max_delay: [type: :integer, default: 5_000, required: true]
   }
 
-  @connect_opts [
+  @connection_opts [
     :username,
     :password,
     :virtual_host,
@@ -131,7 +132,9 @@ defmodule Rabbit.Connection.Server do
   defp init_state(opts) do
     %{
       name: process_name(self()),
-      connection_opts: Keyword.get(opts, :uri) || Keyword.take(opts, @connect_opts),
+      connection_uri: Keyword.get(opts, :uri),
+      connection_name: Keyword.get(opts, :name, :undefined),
+      connection_opts: Keyword.take(opts, @connection_opts),
       connection: nil,
       connection_open: false,
       subscribers: MapSet.new(),
@@ -144,7 +147,7 @@ defmodule Rabbit.Connection.Server do
   defp connect(%{connection_open: true} = state), do: {:ok, state}
 
   defp connect(state) do
-    case AMQP.Connection.open(state.connection_opts) do
+    case do_connect(state) do
       {:ok, connection} ->
         Process.link(connection.pid)
         state = %{state | connection: connection, connection_open: true}
@@ -156,6 +159,18 @@ defmodule Rabbit.Connection.Server do
         log_error(state, error)
         {:error, state}
     end
+  end
+
+  defp do_connect(%{connection_uri: nil} = state) do
+    AMQP.Connection.open(state.connection_opts, state.connection_name)
+  end
+
+  defp do_connect(state) do
+    AMQP.Connection.open(
+      state.connection_uri,
+      state.connection_name,
+      state.connection_opts
+    )
   end
 
   defp disconnect(%{connection_open: false} = state), do: state
