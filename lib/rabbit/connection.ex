@@ -54,6 +54,7 @@ defmodule Rabbit.Connection do
   @type t :: GenServer.name()
   @type option ::
           {:uri, String.t()}
+          | {:name, String.t()}
           | {:username, String.t()}
           | {:password, String.t()}
           | {:virtual_host, String.t()}
@@ -89,7 +90,8 @@ defmodule Rabbit.Connection do
 
   ## Options
 
-    * `:uri` - The connection URI. This takes priority over other connection  attributes.
+    * `:uri` - The connection URI. This takes priority over other connection attributes.
+    * `:name` - A name that will be displayed in the management UI.
     * `:username` - The name of a user registered with the broker - defaults to `"guest"`.
     * `:password` - The password of user - defaults to `"guest\`.
     * `:virtual_host` - The name of a virtual host in the broker - defaults to `"/"`.

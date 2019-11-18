@@ -8,7 +8,7 @@ defmodule Rabbit.Connection.Server do
   require Logger
 
   @opts_schema %{
-    name: [type: [:binary, :atom], required: true, default: :undefined],
+    name: [type: :binary, required: false],
     uri: [type: :binary, required: false],
     username: [type: :binary, default: "guest", required: false],
     password: [type: :binary, default: "guest", required: false],
@@ -133,7 +133,7 @@ defmodule Rabbit.Connection.Server do
     %{
       name: process_name(self()),
       connection_uri: Keyword.get(opts, :uri),
-      connection_name: Keyword.get(opts, :name),
+      connection_name: Keyword.get(opts, :name, :undefined),
       connection_opts: Keyword.take(opts, @connection_opts),
       connection: nil,
       connection_open: false,
