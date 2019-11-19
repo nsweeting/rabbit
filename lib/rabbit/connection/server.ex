@@ -10,18 +10,18 @@ defmodule Rabbit.Connection.Server do
   @opts_schema %{
     name: [type: :binary, required: false],
     uri: [type: :binary, required: false],
-    username: [type: :binary, default: "guest", required: false],
-    password: [type: :binary, default: "guest", required: false],
-    virtual_host: [type: :binary, default: "/", required: false],
-    host: [type: :binary, default: "localhost", required: false],
-    port: [type: :integer, default: 5672, required: false],
-    channel_max: [type: :integer, default: 0, required: false],
-    frame_max: [type: :integer, default: 0, required: false],
-    heartbeat: [type: :integer, default: 10, required: false],
-    connection_timeout: [type: :integer, default: 50_000, required: false],
-    ssl_options: [type: [:binary, :atom], default: :none, required: false],
-    client_properties: [type: :list, default: [], required: false],
-    socket_options: [type: :list, default: [], required: false],
+    username: [type: :binary, required: false],
+    password: [type: :binary, required: false],
+    virtual_host: [type: :binary, required: false],
+    host: [type: :binary, required: false],
+    port: [type: :integer, required: false],
+    channel_max: [type: :integer, required: false],
+    frame_max: [type: :integer, required: false],
+    heartbeat: [type: :integer, required: false],
+    connection_timeout: [type: :integer, required: false],
+    ssl_options: [type: [:binary, :atom], required: false],
+    client_properties: [type: :list, required: false],
+    socket_options: [type: :list, required: false],
     retry_backoff: [type: :integer, default: 1_000, required: true],
     retry_max_delay: [type: :integer, default: 5_000, required: true]
   }
@@ -39,6 +39,13 @@ defmodule Rabbit.Connection.Server do
     :ssl_options,
     :client_properties,
     :socket_options
+  ]
+
+  @default_connection_opts [
+    username: "guest",
+    password: "guest",
+    host: "localhost",
+    port: 5672
   ]
 
   ################################
@@ -162,7 +169,8 @@ defmodule Rabbit.Connection.Server do
   end
 
   defp do_connect(%{connection_uri: nil} = state) do
-    AMQP.Connection.open(state.connection_opts, state.connection_name)
+    opts = Keyword.merge(@default_connection_opts, state.connection_opts)
+    AMQP.Connection.open(opts, state.connection_name)
   end
 
   defp do_connect(state) do
