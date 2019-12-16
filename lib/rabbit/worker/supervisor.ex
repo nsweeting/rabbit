@@ -29,8 +29,8 @@ defmodule Rabbit.Worker.Supervisor do
   ################################
 
   defp build_workers do
-    Enum.reduce(0..Rabbit.Worker.pool_total(), [], fn number, children ->
-      name = Rabbit.Worker.get_name(number)
+    Enum.reduce(1..Rabbit.Worker.pool_total(), [], fn number, children ->
+      name = Rabbit.Worker.build_name(number)
       child = Supervisor.child_spec({Rabbit.Worker, [[name: name]]}, id: name)
       children ++ [child]
     end)
