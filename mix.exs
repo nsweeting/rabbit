@@ -1,7 +1,7 @@
 defmodule Rabbit.MixProject do
   use Mix.Project
 
-  @version "0.7.1"
+  @version "0.8.0"
 
   def project do
     [
@@ -51,7 +51,7 @@ defmodule Rabbit.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      {:amqp, "~> 1.3"},
+      {:amqp, "~> 1.4"},
       {:poolboy, "~> 1.5"},
       {:keyword_validator, "~> 1.0"},
       {:jason, "~> 1.1", optional: true},
