@@ -166,6 +166,10 @@ defmodule Rabbit.Connection.Server do
         log_error(state, error)
         {:error, state}
     end
+  catch
+    :exit, error ->
+      log_error(state, error)
+      {:error, state}
   end
 
   defp do_connect(%{connection_uri: nil} = state) do
