@@ -7,7 +7,7 @@ defmodule Rabbit.ProducerTest do
     use Rabbit.Connection
 
     @impl Rabbit.Connection
-    def init(:connection, opts) do
+    def init(_type, opts) do
       {:ok, opts}
     end
   end
@@ -108,7 +108,7 @@ defmodule Rabbit.ProducerTest do
     assert {:ok, connection} = Connection.start_link(TestConnection)
     assert {:ok, producer} = Producer.start_link(TestProducer, connection: connection)
 
-    state = GenServer.call(connection, :state)
+    state = Connection.transaction(connection, &GenServer.call(&1, :state))
     AMQP.Connection.close(state.connection)
     :timer.sleep(50)
 
