@@ -223,6 +223,7 @@ defmodule Rabbit.Consumer do
   @doc """
   Stops a consumer process.
   """
+  @spec stop(Rabbit.Consumer.t()) :: :ok
   def stop(consumer) do
     GenServer.stop(consumer, :normal)
   end
