@@ -80,6 +80,7 @@ defmodule Rabbit.Producer do
           | {:sync_start_max, non_neg_integer()}
           | {:pool_size, non_neg_integer()}
           | {:max_overflow, non_neg_integer()}
+          | {:strategy, atom()}
           | {:publish_opts, publish_options()}
   @type options :: [option()]
   @type exchange :: String.t()
@@ -95,6 +96,7 @@ defmodule Rabbit.Producer do
   @type pool_option ::
           {:pool_size, non_neg_integer()}
           | {:max_overflow, non_neg_integer()}
+          | {:strategy, atom()}
   @type pool_options :: [pool_option()]
   @type publish_option ::
           {:mandatory, boolean()}

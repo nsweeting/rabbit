@@ -7,7 +7,7 @@ defmodule Rabbit.ConsumerSupervisorTest do
     use Rabbit.Connection
 
     @impl Rabbit.Connection
-    def init(:connection, opts) do
+    def init(_type, opts) do
       {:ok, opts}
     end
   end

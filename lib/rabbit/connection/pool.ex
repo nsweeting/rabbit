@@ -1,12 +1,12 @@
-defmodule Rabbit.Producer.Pool do
+defmodule Rabbit.Connection.Pool do
   @moduledoc false
 
-  alias Rabbit.Producer.Server
+  alias Rabbit.Connection.Server
 
   @opts_schema %{
     pool_size: [type: :integer, default: 1, required: true],
     max_overflow: [type: :integer, default: 0, required: true],
-    strategy: [type: :atom, default: :lifo, required: true]
+    strategy: [type: :atom, default: :fifo, required: true]
   }
 
   defmodule Worker do
@@ -27,7 +27,7 @@ defmodule Rabbit.Producer.Pool do
   def start_link(module, opts \\ [], server_opts \\ []) do
     worker_opts = get_worker_opts(module, opts)
 
-    with {:ok, opts} <- module.init(:producer_pool, opts),
+    with {:ok, opts} <- module.init(:connection_pool, opts),
          {:ok, opts} <- validate_opts(opts) do
       pool_opts = get_pool_opts(opts, server_opts)
       :poolboy.start_link(pool_opts, worker_opts)
@@ -47,7 +47,7 @@ defmodule Rabbit.Producer.Pool do
       worker_module: Worker,
       size: Keyword.get(opts, :pool_size, 1),
       max_overflow: Keyword.get(opts, :max_overflow, 0),
-      strategy: Keyword.get(opts, :strategy, :lifo)
+      strategy: Keyword.get(opts, :strategy, :fifo)
     ]
     |> with_pool_name(server_opts)
   end

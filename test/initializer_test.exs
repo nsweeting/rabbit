@@ -7,7 +7,7 @@ defmodule Rabbit.InitializerTest do
     use Rabbit.Connection
 
     @impl Rabbit.Connection
-    def init(:connection, opts) do
+    def init(_type, opts) do
       {:ok, opts}
     end
   end
@@ -19,14 +19,27 @@ defmodule Rabbit.InitializerTest do
       GenServer.start_link(__MODULE__, :ok)
     end
 
+    def init(_type, opts) do
+      {:ok, opts}
+    end
+
     @impl GenServer
-    def init(:ok) do
+    def init(_arg) do
       {:ok, :ok}
     end
 
     @impl GenServer
+    def handle_call({:checkout, _, _}, _from, state) do
+      {:reply, self(), state}
+    end
+
     def handle_call(:fetch, _from, state) do
       {:reply, {:error, :no_connection}, state}
+    end
+
+    @impl GenServer
+    def handle_cast(_, state) do
+      {:noreply, state}
     end
   end
 
