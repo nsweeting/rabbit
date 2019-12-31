@@ -70,7 +70,7 @@ defmodule Rabbit.Connection do
           | {:retry_max_delay, non_neg_integer()}
           | {:pool_size, non_neg_integer()}
           | {:max_overflow, non_neg_integer()}
-          | {:strategy, atom()}
+          | {:strategy, :lifo | :fifo}
   @type options :: [option()]
   @type connection_option ::
           {:uri, String.t()}
@@ -92,7 +92,7 @@ defmodule Rabbit.Connection do
   @type pool_option ::
           {:pool_size, non_neg_integer()}
           | {:max_overflow, non_neg_integer()}
-          | {:strategy, atom()}
+          | {:strategy, :lifo | :fifo}
   @type pool_options :: [pool_option()]
 
   @doc """
@@ -149,10 +149,12 @@ defmodule Rabbit.Connection do
     * `:socket_options` - Extra socket options. These are appended to the default options. \
       See http://www.erlang.org/doc/man/inet.html#setopts-2 and http://www.erlang.org/doc/man/gen_tcp.html#connect-4 \
       for descriptions of the available options.
-          * `:pool_size` - The number of processes to create for publishing - defaults to `1`.
-      Each process consumes a RabbitMQ channel.
+    * `:pool_size` - The number of processes to create for connections - defaults to `1`.
+      Each process consumes a RabbitMQ connection.
     * `:max_overflow` - Maximum number of temporary workers created when the pool
       is empty - defaults to `0`.
+    * `:stratgey` - Determines whether checked in workers should be placed first
+      or last in the line of available workers - defaults to `:fifo`.
 
   ## Server Options
 

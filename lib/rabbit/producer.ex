@@ -80,7 +80,7 @@ defmodule Rabbit.Producer do
           | {:sync_start_max, non_neg_integer()}
           | {:pool_size, non_neg_integer()}
           | {:max_overflow, non_neg_integer()}
-          | {:strategy, atom()}
+          | {:strategy, :lifo | :fifo}
           | {:publish_opts, publish_options()}
   @type options :: [option()]
   @type exchange :: String.t()
@@ -96,7 +96,7 @@ defmodule Rabbit.Producer do
   @type pool_option ::
           {:pool_size, non_neg_integer()}
           | {:max_overflow, non_neg_integer()}
-          | {:strategy, atom()}
+          | {:strategy, :lifo | :fifo}
   @type pool_options :: [pool_option()]
   @type publish_option ::
           {:mandatory, boolean()}
@@ -177,6 +177,8 @@ defmodule Rabbit.Producer do
       Each process consumes a RabbitMQ channel.
     * `:max_overflow` - Maximum number of temporary workers created when the pool
       is empty - defaults to `0`.
+    * `:stratgey` - Determines whether checked in workers should be placed first
+      or last in the line of available workers - defaults to `:lifo`.
     * `:sync_start` - Boolean representing whether to establish the connection
       and channel syncronously - defaults to `true`.
     * `:sync_start_delay` - The amount of time in milliseconds to sleep between
