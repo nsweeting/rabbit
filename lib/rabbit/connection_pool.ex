@@ -4,7 +4,9 @@ defmodule Rabbit.ConnectionPool do
 
   This mirrors the API of the `Rabbit.Connection` module, except is creates a
   pool of connection processes. It provides all the same connection guarantees as
-  `Rabbit.Connection`.
+  `Rabbit.Connection`, as well as:
+
+  * Connection pooling for increased producer and consumer performance.
 
   ## Example
 

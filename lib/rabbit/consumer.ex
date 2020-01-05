@@ -109,7 +109,7 @@ defmodule Rabbit.Consumer do
   cause `start_link/3` to return `{:ok, pid}` and the process to enter its loop.
 
   Returning `:ignore` will cause `start_link/3` to return `:ignore` and the process
-  will exit normally without entering the loop
+  will exit normally without entering the loop.
   """
   @callback init(:consumer, options()) :: {:ok, options()} | :ignore
 
