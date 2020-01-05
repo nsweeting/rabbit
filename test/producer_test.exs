@@ -27,28 +27,8 @@ defmodule Rabbit.ProducerTest do
       assert {:ok, _producer} = Producer.start_link(TestProducer, connection: connection)
     end
 
-    test "starts producer with pool_size" do
-      assert {:ok, connection} = Connection.start_link(TestConnection)
-
-      assert {:ok, producer} =
-               Producer.start_link(TestProducer, connection: connection, pool_size: 2)
-
-      assert [_, _] = GenServer.call(producer, :get_avail_workers)
-
-      assert {:ok, producer} =
-               Producer.start_link(TestProducer, connection: connection, pool_size: 3)
-
-      assert [_, _, _] = GenServer.call(producer, :get_avail_workers)
-    end
-
-    test "returns error when given bad pool options" do
-      assert {:error, _} = Producer.start_link(TestProducer, pool_size: "foo")
-    end
-
     test "returns error when given bad producer options" do
-      Process.flag(:trap_exit, true)
-      Producer.start_link(TestProducer, connection: "foo")
-      assert_receive {:EXIT, _, _}
+      {:error, _} = Producer.start_link(TestProducer, connection: "foo")
     end
   end
 
@@ -66,8 +46,7 @@ defmodule Rabbit.ProducerTest do
 
       await_publishing(producer)
 
-      [worker] = GenServer.call(producer, :get_avail_workers)
-      state = GenServer.call(worker, :state)
+      state = GenServer.call(producer, :state)
 
       assert Process.alive?(state.channel.pid)
       assert :ok = Producer.stop(producer)
@@ -160,8 +139,6 @@ defmodule Rabbit.ProducerTest do
 
   def await_publishing(producer) do
     producer
-    |> GenServer.call(:get_avail_workers)
-    |> List.first()
     |> GenServer.call(:state)
     |> case do
       %{channel: nil} ->

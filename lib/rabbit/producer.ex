@@ -6,7 +6,6 @@ defmodule Rabbit.Producer do
   standard `AMQP.Channel` and provide the following benefits:
 
   * Durability during connection and channel failures through use of expotential backoff.
-  * Channel pooling for increased publishing performance.
   * Easy runtime setup through an `c:init/2` and `c:handle_setup/1` callbacks.
   * Simplification of standard publishing options.
   * Automatic payload encoding based on available serializers and message
@@ -78,26 +77,11 @@ defmodule Rabbit.Producer do
           | {:sync_start, boolean()}
           | {:sync_start_delay, non_neg_integer()}
           | {:sync_start_max, non_neg_integer()}
-          | {:pool_size, non_neg_integer()}
-          | {:max_overflow, non_neg_integer()}
-          | {:strategy, :lifo | :fifo}
           | {:publish_opts, publish_options()}
   @type options :: [option()]
   @type exchange :: String.t()
   @type routing_key :: String.t()
   @type message :: term()
-  @type producer_option ::
-          {:connection, Rabbit.Connection.t()}
-          | {:sync_start, boolean()}
-          | {:sync_start_delay, non_neg_integer()}
-          | {:sync_start_max, non_neg_integer()}
-          | {:publish_opts, publish_options()}
-  @type producer_options :: [producer_option()]
-  @type pool_option ::
-          {:pool_size, non_neg_integer()}
-          | {:max_overflow, non_neg_integer()}
-          | {:strategy, :lifo | :fifo}
-  @type pool_options :: [pool_option()]
   @type publish_option ::
           {:mandatory, boolean()}
           | {:immediate, boolean()}
@@ -117,29 +101,15 @@ defmodule Rabbit.Producer do
   @type publish_options :: [publish_option()]
 
   @doc """
-  A callback executed by each component of the producer.
-
-  Two versions of the callback must be created. One for the pool, and one
-  for the producers. The first argument differentiates the callback.
-
-        # Initialize the pool
-        def init(:producer_pool, opts) do
-          {:ok, opts}
-        end
-
-        # Initialize a single producer
-        def init(:producer, opts) do
-          {:ok, opts}
-        end
+  A callback executed when the producer is started.
 
   Returning `{:ok, opts}` - where `opts` is a keyword list of `t:option()` will,
   cause `start_link/3` to return `{:ok, pid}` and the process to enter its loop.
 
   Returning `:ignore` will cause `start_link/3` to return `:ignore` and the process
-  will exit normally without entering the loop
+  will exit normally without entering the loop.
   """
-  @callback init(:producer_pool | :producer, options()) ::
-              {:ok, pool_options() | producer_options()} | :ignore
+  @callback init(:producer, options()) :: {:ok, options()} | :ignore
 
   @doc """
   An optional callback executed after the channel is open.
@@ -154,7 +124,7 @@ defmodule Rabbit.Producer do
       end
 
   The callback must return an `:ok` atom - otherise it will be marked as failed,
-  and the consumer will attempt to go through the connection setup process again.
+  and the producer will attempt to go through the channel setup process again.
 
   Alternatively, you could use a `Rabbit.Initializer` process to perform this
   setup work. Please see its docs for more information.
@@ -173,12 +143,6 @@ defmodule Rabbit.Producer do
   ## Options
 
     * `:connection` - A `Rabbit.Connection` process.
-    * `:pool_size` - The number of processes to create for publishing - defaults to `1`.
-      Each process consumes a RabbitMQ channel.
-    * `:max_overflow` - Maximum number of temporary workers created when the pool
-      is empty - defaults to `0`.
-    * `:stratgey` - Determines whether checked in workers should be placed first
-      or last in the line of available workers - defaults to `:lifo`.
     * `:sync_start` - Boolean representing whether to establish the connection
       and channel syncronously - defaults to `true`.
     * `:sync_start_delay` - The amount of time in milliseconds to sleep between
@@ -197,7 +161,7 @@ defmodule Rabbit.Producer do
   @spec start_link(module(), options(), GenServer.options()) ::
           Supervisor.on_start()
   def start_link(module, opts \\ [], server_opts \\ []) do
-    Producer.Pool.start_link(module, opts, server_opts)
+    Producer.Server.start_link(module, opts, server_opts)
   end
 
   @doc """
@@ -205,11 +169,7 @@ defmodule Rabbit.Producer do
   """
   @spec stop(Rabbit.Producer.t()) :: :ok
   def stop(producer) do
-    for {_, worker, _, _} <- GenServer.call(producer, :get_all_workers) do
-      :ok = GenServer.call(worker, :disconnect)
-    end
-
-    :poolboy.stop(producer)
+    GenServer.stop(producer, :normal)
   end
 
   @doc """
@@ -264,7 +224,7 @@ defmodule Rabbit.Producer do
         ) :: :ok | {:error, any()}
   def publish(producer, exchange, routing_key, payload, opts \\ [], timeout \\ 5_000) do
     message = {exchange, routing_key, payload, opts}
-    :poolboy.transaction(producer, &GenServer.call(&1, {:publish, message}, timeout))
+    GenServer.call(producer, {:publish, message}, timeout)
   end
 
   defmacro __using__(opts) do
