@@ -164,7 +164,7 @@ defmodule Rabbit.ProducerPool do
 
   The function must accept a connection pid.
   """
-  @spec transaction(Rabbit.ProducerPool.t(), (Rabbit.Connection.t() -> any())) :: any()
+  @spec transaction(Rabbit.ProducerPool.t(), (Rabbit.Prodcuer.t() -> any())) :: any()
   def transaction(producer_pool, fun) do
     :poolboy.transaction(producer_pool, &fun.(&1))
   end
