@@ -68,57 +68,18 @@ defmodule Rabbit.Connection do
           | {:socket_options, Keyword.t()}
           | {:retry_backoff, non_neg_integer()}
           | {:retry_max_delay, non_neg_integer()}
-          | {:pool_size, non_neg_integer()}
-          | {:max_overflow, non_neg_integer()}
-          | {:strategy, :lifo | :fifo}
   @type options :: [option()]
-  @type connection_option ::
-          {:uri, String.t()}
-          | {:name, String.t()}
-          | {:username, String.t()}
-          | {:password, String.t()}
-          | {:virtual_host, String.t()}
-          | {:host, String.t()}
-          | {:port, integer()}
-          | {:channel_max, integer()}
-          | {:frame_max, integer()}
-          | {:heartbeat, integer()}
-          | {:connection_timeout, integer()}
-          | {:ssl_options, atom() | Keyword.t()}
-          | {:socket_options, Keyword.t()}
-          | {:retry_backoff, non_neg_integer()}
-          | {:retry_max_delay, non_neg_integer()}
-  @type connection_options :: [connection_option()]
-  @type pool_option ::
-          {:pool_size, non_neg_integer()}
-          | {:max_overflow, non_neg_integer()}
-          | {:strategy, :lifo | :fifo}
-  @type pool_options :: [pool_option()]
 
   @doc """
-  A callback executed by each component of the connection.
+  A callback executed when the connection is started.
 
-  Two versions of the callback must be created. One for the pool, and one
-  for the connections. The first argument differentiates the callback.
-
-        # Initialize the pool
-        def init(:connection_pool, opts) do
-          {:ok, opts}
-        end
-
-        # Initialize a single connection
-        def init(:connection, opts) do
-          {:ok, opts}
-        end
-
-  Returning `{:ok, opts}` - where `opts` is a keyword list of `t:option()` will,
+  Returning `{:ok, opts}` - where `opts` is a keyword list of `t:option/0` will,
   cause `start_link/3` to return `{:ok, pid}` and the process to enter its loop.
 
   Returning `:ignore` will cause `start_link/3` to return `:ignore` and the process
-  will exit normally without entering the loop
+  will exit normally without entering the loop.
   """
-  @callback init(:connection_pool | :connection, options()) ::
-              {:ok, pool_options() | connection_options()} | :ignore
+  @callback init(:connection, options()) :: {:ok, options()} | :ignore
 
   ################################
   # Public API
@@ -149,12 +110,6 @@ defmodule Rabbit.Connection do
     * `:socket_options` - Extra socket options. These are appended to the default options. \
       See http://www.erlang.org/doc/man/inet.html#setopts-2 and http://www.erlang.org/doc/man/gen_tcp.html#connect-4 \
       for descriptions of the available options.
-    * `:pool_size` - The number of processes to create for connections - defaults to `1`.
-      Each process consumes a RabbitMQ connection.
-    * `:max_overflow` - Maximum number of temporary workers created when the pool
-      is empty - defaults to `0`.
-    * `:stratgey` - Determines whether checked in workers should be placed first
-      or last in the line of available workers - defaults to `:fifo`.
 
   ## Server Options
 
@@ -164,50 +119,35 @@ defmodule Rabbit.Connection do
   """
   @spec start_link(module(), options(), GenServer.options()) :: GenServer.on_start()
   def start_link(module, opts \\ [], server_opts \\ []) do
-    Connection.Pool.start_link(module, opts, server_opts)
+    Connection.Server.start_link(module, opts, server_opts)
   end
 
   @doc """
-  Stops the connection pool.
+  Stops a connection process.
   """
   @spec stop(Rabbit.Connection.t()) :: :ok
   def stop(connection) do
-    for {_, worker, _, _} <- GenServer.call(connection, :get_all_workers) do
-      :ok = GenServer.call(worker, :disconnect)
-    end
-
-    :poolboy.stop(connection)
+    GenServer.stop(connection, :normal)
   end
 
   @doc """
-  Fetches a raw `AMQP.Connection` struct from the pool.
+  Fetches the raw `AMQP.Connection` struct from the process.
   """
-  @spec fetch(Rabbit.Connection.t(), timeout()) ::
-          {:ok, AMQP.Connection.t()} | {:error, :not_connected}
-  def fetch(connection, timeout \\ 5_000) do
-    :poolboy.transaction(connection, &GenServer.call(&1, :fetch, timeout))
+  @spec fetch(Rabbit.Connection.t()) :: {:ok, AMQP.Connection.t()} | {:error, :not_connected}
+  def fetch(connection) do
+    GenServer.call(connection, :fetch)
   end
 
   @doc """
-  Checks whether a connection is alive within the pool.
+  Checks whether a connection is alive.
   """
-  @spec alive?(Rabbit.Connection.t(), timeout()) :: boolean()
-  def alive?(connection, timeout \\ 5_000) do
-    :poolboy.transaction(connection, &GenServer.call(&1, :alive?, timeout))
+  @spec alive?(Rabbit.Connection.t()) :: boolean()
+  def alive?(connection) do
+    GenServer.call(connection, :alive?)
   end
 
   @doc """
-  Runs the given function inside a transaction.
-
-  The function must accept a connection pid.
-  """
-  @spec transaction(Rabbit.Connection.t(), (Rabbit.Connection.t() -> any())) :: any()
-  def transaction(connection, fun) do
-    :poolboy.transaction(connection, &fun.(&1))
-  end
-
-  @doc """
-  Subscribes a process to a connection in the pool.
+  Subscribes a process to the connection.
 
   A subscribed process can receive the following messages:
 
@@ -224,10 +164,10 @@ defmodule Rabbit.Connection do
   connection is achieved again.
 
   """
-  @spec subscribe(Rabbit.Connection.t(), pid() | nil, timeout()) :: :ok
-  def subscribe(connection, subscriber \\ nil, timeout \\ 5_000) do
+  @spec subscribe(Rabbit.Connection.t(), pid() | nil) :: :ok
+  def subscribe(connection, subscriber \\ nil) do
     subscriber = subscriber || self()
-    :poolboy.transaction(connection, &GenServer.call(&1, {:subscribe, subscriber}, timeout))
+    GenServer.call(connection, {:subscribe, subscriber})
   end
 
   defmacro __using__(opts) do

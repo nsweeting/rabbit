@@ -45,7 +45,7 @@ defmodule Rabbit.ConnectionTest do
     test "disconnects the amqp connection" do
       assert {:ok, connection} = Connection.start_link(TestConnection)
 
-      state = Connection.transaction(connection, &GenServer.call(&1, :state))
+      state = GenServer.call(connection, :state)
 
       assert Process.alive?(state.connection.pid)
       assert :ok = Connection.stop(connection)
@@ -66,14 +66,22 @@ defmodule Rabbit.ConnectionTest do
     test "subscribes to connection" do
       assert {:ok, connection} = Connection.start_link(TestConnection)
 
-      state = Connection.transaction(connection, &GenServer.call(&1, :state))
+      state = GenServer.call(connection, :state)
 
       refute MapSet.member?(state.subscribers, self())
 
       Connection.subscribe(connection)
-      state = Connection.transaction(connection, &GenServer.call(&1, :state))
+      state = GenServer.call(connection, :state)
 
       assert MapSet.member?(state.subscribers, self())
+    end
+
+    test "sends raw connection to subscriber" do
+      assert {:ok, connection} = Connection.start_link(TestConnection)
+
+      Connection.subscribe(connection)
+
+      assert_receive {:connected, %_{}}
     end
   end
 
@@ -95,14 +103,14 @@ defmodule Rabbit.ConnectionTest do
       Task.async(fn ->
         subscriber = self()
         Connection.subscribe(connection, subscriber)
-        state = Connection.transaction(connection, &GenServer.call(&1, :state))
+        state = GenServer.call(connection, :state)
 
         assert MapSet.member?(state.subscribers, subscriber)
       end)
 
     Task.await(task)
     :timer.sleep(50)
-    state = Connection.transaction(connection, &GenServer.call(&1, :state))
+    state = GenServer.call(connection, :state)
 
     refute MapSet.member?(state.subscribers, task.pid)
   end
@@ -116,10 +124,6 @@ defmodule Rabbit.ConnectionTest do
       @impl Rabbit.Connection
       def init(:connection, opts) do
         send(:connection_test, :init_callback)
-        {:ok, opts}
-      end
-
-      def init(_type, opts) do
         {:ok, opts}
       end
     end
