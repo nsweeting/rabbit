@@ -93,7 +93,7 @@ defmodule Rabbit.ConsumerTest do
   test "will reconnect when connection stops", meta do
     assert {:ok, consumer, _queue} = start_consumer(meta)
 
-    connection_state = GenServer.call(meta.connection, :state)
+    connection_state = connection_state(meta.connection)
     consumer_state1 = GenServer.call(consumer, :state)
     AMQP.Connection.close(connection_state.connection)
     await_consuming(consumer)
@@ -135,7 +135,7 @@ defmodule Rabbit.ConsumerTest do
   end
 
   test "will ack messages based on return value", meta do
-    state = GenServer.call(meta.connection, :state)
+    state = connection_state(meta.connection)
     {:ok, channel} = AMQP.Channel.open(state.connection)
     queue = queue_name()
     AMQP.Queue.declare(channel, queue, auto_delete: true)
@@ -179,5 +179,9 @@ defmodule Rabbit.ConsumerTest do
 
   defp queue_name do
     :crypto.strong_rand_bytes(8) |> Base.encode64()
+  end
+
+  defp connection_state(connection) do
+    Connection.transaction(connection, &GenServer.call(&1, :state))
   end
 end

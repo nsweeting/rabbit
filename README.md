@@ -26,6 +26,9 @@ Please see [HexDocs](https://hexdocs.pm/rabbit) for additional documentation.
 Connections form the basis of any application that is working with RabbitMQ. A
 connection module is needed by all the other modules included with Rabbit.
 
+Upon start, a connection will automatically create a pool of RabbitMQ connections
+to utilize.
+
 ```elixir
 defmodule MyConnection do
   use Rabbit.Connection
@@ -37,8 +40,13 @@ defmodule MyConnection do
   # Callbacks
 
   @impl Rabbit.Connection
+  def init(:connection_pool, opts) do
+    # Perform runtime pool config
+    {:ok, opts}
+  end
+
   def init(:connection, opts) do
-    # Perform runtime config
+    # Perform runtime connection config
     uri = System.get_env("RABBITMQ_URI") || "amqp://guest:guest@127.0.0.1:5672"
     opts = Keyword.put(opts, :uri, uri)
 
@@ -157,8 +165,10 @@ MyConsumerSupervisor.start_link()
 ## [Producers](https://hexdocs.pm/rabbit/Rabbit.Producer.html)
 
 In order to publish messages to RabbitMQ, we must create a producer module. They
-must be provided a connection module. The producer will then automatically create
-a pool of channels to publish from.
+must be provided a connection module.
+
+Upon start, a producer will automatically create a pool of RabbitMQ channels
+to publish from.
 
 You can optionally implement the `handle_setup/1` callback to perform any work
 needed to declare queues/exchanges/bindings.

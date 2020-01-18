@@ -27,8 +27,26 @@ defmodule Rabbit.ProducerTest do
       assert {:ok, _producer} = Producer.start_link(TestProducer, connection: connection)
     end
 
+    test "starts producer with pool_size" do
+      assert {:ok, connection} = Connection.start_link(TestConnection)
+
+      assert {:ok, producer} =
+               Producer.start_link(TestProducer, connection: connection, pool_size: 2)
+
+      assert [_, _] = GenServer.call(producer, :get_avail_workers)
+
+      assert {:ok, producer} =
+               Producer.start_link(TestProducer, connection: connection, pool_size: 3)
+
+      assert [_, _, _] = GenServer.call(producer, :get_avail_workers)
+    end
+
     test "returns error when given bad producer options" do
       {:error, _} = Producer.start_link(TestProducer, connection: "foo")
+    end
+
+    test "returns error when given bad pool options" do
+      assert {:error, _} = Producer.start_link(TestProducer, pool_size: "foo")
     end
   end
 
@@ -42,11 +60,13 @@ defmodule Rabbit.ProducerTest do
 
     test "disconnects the amqp channel" do
       assert {:ok, connection} = Connection.start_link(TestConnection)
+
       assert {:ok, producer} = Producer.start_link(TestProducer, connection: connection)
 
       await_publishing(producer)
 
-      state = GenServer.call(producer, :state)
+      [worker] = GenServer.call(producer, :get_avail_workers)
+      state = GenServer.call(worker, :state)
 
       assert Process.alive?(state.channel.pid)
       assert :ok = Producer.stop(producer)
@@ -87,7 +107,7 @@ defmodule Rabbit.ProducerTest do
     assert {:ok, connection} = Connection.start_link(TestConnection)
     assert {:ok, producer} = Producer.start_link(TestProducer, connection: connection)
 
-    state = GenServer.call(connection, :state)
+    state = connection_state(connection)
     AMQP.Connection.close(state.connection)
     :timer.sleep(50)
 
@@ -96,15 +116,19 @@ defmodule Rabbit.ProducerTest do
     AMQP.Queue.purge(amqp_chan, "foo")
   end
 
-  test "producer modules use init callback" do
+  test "producer modules use producer_pool init callback" do
     Process.register(self(), :producer_test)
 
     defmodule TestProducerTwo do
       use Rabbit.Producer
 
       @impl Rabbit.Producer
-      def init(_type, opts) do
+      def init(:producer_pool, opts) do
         send(:producer_test, :init_callback)
+        {:ok, opts}
+      end
+
+      def init(:producer, opts) do
         {:ok, opts}
       end
     end
@@ -114,10 +138,32 @@ defmodule Rabbit.ProducerTest do
     assert_receive :init_callback
   end
 
-  test "producer modules use handle_setup callback" do
+  test "producer modules use producer init callback" do
     Process.register(self(), :producer_test)
 
     defmodule TestProducerThree do
+      use Rabbit.Producer
+
+      @impl Rabbit.Producer
+      def init(:producer_pool, opts) do
+        {:ok, opts}
+      end
+
+      def init(:producer, opts) do
+        send(:producer_test, :init_callback)
+        {:ok, opts}
+      end
+    end
+
+    assert {:ok, connection} = Connection.start_link(TestConnection)
+    assert {:ok, producer} = Producer.start_link(TestProducerThree, connection: connection)
+    assert_receive :init_callback
+  end
+
+  test "producer modules use handle_setup callback" do
+    Process.register(self(), :producer_test)
+
+    defmodule TestProducerFour do
       use Rabbit.Producer
 
       @impl Rabbit.Producer
@@ -133,12 +179,14 @@ defmodule Rabbit.ProducerTest do
     end
 
     assert {:ok, connection} = Connection.start_link(TestConnection)
-    assert {:ok, producer} = Producer.start_link(TestProducerThree, connection: connection)
+    assert {:ok, producer} = Producer.start_link(TestProducerFour, connection: connection)
     assert_receive :handle_setup_callback
   end
 
   def await_publishing(producer) do
     producer
+    |> GenServer.call(:get_avail_workers)
+    |> List.first()
     |> GenServer.call(:state)
     |> case do
       %{channel: nil} ->
@@ -148,5 +196,9 @@ defmodule Rabbit.ProducerTest do
       _ ->
         :ok
     end
+  end
+
+  defp connection_state(connection) do
+    Connection.transaction(connection, &GenServer.call(&1, :state))
   end
 end
