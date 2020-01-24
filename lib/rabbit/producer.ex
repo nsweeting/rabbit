@@ -6,6 +6,7 @@ defmodule Rabbit.Producer do
   standard `AMQP.Channel` and provide the following benefits:
 
   * Durability during connection and channel failures through use of expotential backoff.
+  * Channel pooling for increased publishing performance.
   * Easy runtime setup through an `c:init/2` and `c:handle_setup/1` callbacks.
   * Simplification of standard publishing options.
   * Automatic payload encoding based on available serializers and message
@@ -74,6 +75,9 @@ defmodule Rabbit.Producer do
   @type t :: GenServer.name()
   @type option ::
           {:connection, Rabbit.Connection.t()}
+          | {:pool_size, non_neg_integer()}
+          | {:max_overflow, non_neg_integer()}
+          | {:strategy, :lifo | :fifo}
           | {:sync_start, boolean()}
           | {:sync_start_delay, non_neg_integer()}
           | {:sync_start_max, non_neg_integer()}
@@ -101,18 +105,31 @@ defmodule Rabbit.Producer do
   @type publish_options :: [publish_option()]
 
   @doc """
-  A callback executed when the producer is started.
+  A callback executed by each component of the producer pool.
+
+  Two versions of the callback must be created. One for the pool, and one
+  for the producers. The first argument differentiates the callback.
+
+        # Initialize the pool
+        def init(:producer_pool, opts) do
+          {:ok, opts}
+        end
+
+        # Initialize a single producer
+        def init(:producer, opts) do
+          {:ok, opts}
+        end
 
   Returning `{:ok, opts}` - where `opts` is a keyword list of `t:option()` will,
   cause `start_link/3` to return `{:ok, pid}` and the process to enter its loop.
 
   Returning `:ignore` will cause `start_link/3` to return `:ignore` and the process
-  will exit normally without entering the loop.
+  will exit normally without entering the loop
   """
-  @callback init(:producer, options()) :: {:ok, options()} | :ignore
+  @callback init(:producer_pool | :producer, options()) :: {:ok, options()} | :ignore
 
   @doc """
-  An optional callback executed after the channel is open.
+  An optional callback executed after the channel is open for each producer.
 
   The callback is called with an `AMQP.Channel`. At the most basic, you may want
   to declare queues that you will be publishing to.
@@ -143,6 +160,12 @@ defmodule Rabbit.Producer do
   ## Options
 
     * `:connection` - A `Rabbit.Connection` process.
+    * `:pool_size` - The number of processes to create for producers - defaults to `1`.
+      Each process consumes a RabbitMQ channel.
+    * `:max_overflow` - Maximum number of temporary workers created when the pool
+      is empty - defaults to `0`.
+    * `:stratgey` - Determines whether checked in workers should be placed first
+      or last in the line of available workers - defaults to `:lifo`.
     * `:sync_start` - Boolean representing whether to establish the connection
       and channel syncronously - defaults to `true`.
     * `:sync_start_delay` - The amount of time in milliseconds to sleep between
@@ -161,7 +184,17 @@ defmodule Rabbit.Producer do
   @spec start_link(module(), options(), GenServer.options()) ::
           Supervisor.on_start()
   def start_link(module, opts \\ [], server_opts \\ []) do
-    Producer.Server.start_link(module, opts, server_opts)
+    Producer.Pool.start_link(module, opts, server_opts)
+  end
+
+  @doc """
+  Runs the given function inside a transaction.
+
+  The function must accept a producer child pid.
+  """
+  @spec transaction(Rabbit.Producer.t(), (Rabbit.Prodcuer.t() -> any())) :: any()
+  def transaction(producer, fun) do
+    :poolboy.transaction(producer, &fun.(&1))
   end
 
   @doc """
@@ -169,7 +202,11 @@ defmodule Rabbit.Producer do
   """
   @spec stop(Rabbit.Producer.t()) :: :ok
   def stop(producer) do
-    GenServer.stop(producer, :normal)
+    for {_, worker, _, _} <- GenServer.call(producer, :get_all_workers) do
+      :ok = GenServer.call(worker, :disconnect)
+    end
+
+    :poolboy.stop(producer)
   end
 
   @doc """
@@ -224,7 +261,7 @@ defmodule Rabbit.Producer do
         ) :: :ok | {:error, any()}
   def publish(producer, exchange, routing_key, payload, opts \\ [], timeout \\ 5_000) do
     message = {exchange, routing_key, payload, opts}
-    GenServer.call(producer, {:publish, message}, timeout)
+    :poolboy.transaction(producer, &GenServer.call(&1, {:publish, message}, timeout))
   end
 
   defmacro __using__(opts) do

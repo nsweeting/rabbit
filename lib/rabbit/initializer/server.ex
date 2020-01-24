@@ -9,11 +9,7 @@ defmodule Rabbit.Initializer.Server do
 
   @exchange_schema %{
     name: [type: :binary, required: true],
-    type: [
-      inclusion: [:direct, :fanout, :topic, :match, :headers],
-      required: true,
-      default: :direct
-    ],
+    type: [type: :atom, required: true, default: :direct],
     durable: [type: :boolean, required: true, default: false],
     passive: [type: :boolean, required: true, default: false],
     auto_delete: [type: :boolean, required: true, default: false],

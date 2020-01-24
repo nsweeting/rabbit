@@ -25,6 +25,14 @@ defmodule Rabbit.ConnectionTest do
       assert true = Connection.alive?(connection)
     end
 
+    test "starts connection with pool_size" do
+      assert {:ok, connection} = Connection.start_link(TestConnection)
+
+      assert [_] = GenServer.call(connection, :get_avail_workers)
+      assert {:ok, connection} = Connection.start_link(TestConnection, pool_size: 3)
+      assert [_, _, _] = GenServer.call(connection, :get_avail_workers)
+    end
+
     test "starts a connection with name" do
       assert {:ok, connection} = Connection.start_link(TestConnection, [], name: :foo)
       assert true = Connection.alive?(:foo)
@@ -32,6 +40,10 @@ defmodule Rabbit.ConnectionTest do
 
     test "returns error when given bad connection options" do
       assert {:error, _} = Connection.start_link(TestConnection, uri: 1)
+    end
+
+    test "returns error when given bad pool options" do
+      assert {:error, _} = Connection.start_link(TestConnection, pool_size: "foo")
     end
   end
 
@@ -45,7 +57,7 @@ defmodule Rabbit.ConnectionTest do
     test "disconnects the amqp connection" do
       assert {:ok, connection} = Connection.start_link(TestConnection)
 
-      state = GenServer.call(connection, :state)
+      state = connection_state(connection)
 
       assert Process.alive?(state.connection.pid)
       assert :ok = Connection.stop(connection)
@@ -66,12 +78,12 @@ defmodule Rabbit.ConnectionTest do
     test "subscribes to connection" do
       assert {:ok, connection} = Connection.start_link(TestConnection)
 
-      state = GenServer.call(connection, :state)
+      state = connection_state(connection)
 
       refute MapSet.member?(state.subscribers, self())
 
       Connection.subscribe(connection)
-      state = GenServer.call(connection, :state)
+      state = connection_state(connection)
 
       assert MapSet.member?(state.subscribers, self())
     end
@@ -103,32 +115,61 @@ defmodule Rabbit.ConnectionTest do
       Task.async(fn ->
         subscriber = self()
         Connection.subscribe(connection, subscriber)
-        state = GenServer.call(connection, :state)
+        state = connection_state(connection)
 
         assert MapSet.member?(state.subscribers, subscriber)
       end)
 
     Task.await(task)
     :timer.sleep(50)
-    state = GenServer.call(connection, :state)
+    state = connection_state(connection)
 
     refute MapSet.member?(state.subscribers, task.pid)
   end
 
-  test "connection modules use init callback" do
+  test "connection modules use init connection_pool callback" do
     Process.register(self(), :connection_test)
 
     defmodule TestConnectionTwo do
       use Rabbit.Connection
 
       @impl Rabbit.Connection
-      def init(:connection, opts) do
+      def init(:connection_pool, opts) do
         send(:connection_test, :init_callback)
+        {:ok, opts}
+      end
+
+      def init(:connection, opts) do
         {:ok, opts}
       end
     end
 
     assert {:ok, _connection} = Connection.start_link(TestConnectionTwo)
     assert_receive :init_callback
+  end
+
+  test "connection modules use init connection callback" do
+    Process.register(self(), :connection_test)
+
+    defmodule TestConnectionThree do
+      use Rabbit.Connection
+
+      @impl Rabbit.Connection
+      def init(:connection_pool, opts) do
+        {:ok, opts}
+      end
+
+      def init(:connection, opts) do
+        send(:connection_test, :init_callback)
+        {:ok, opts}
+      end
+    end
+
+    assert {:ok, _connection} = Connection.start_link(TestConnectionThree)
+    assert_receive :init_callback
+  end
+
+  defp connection_state(connection) do
+    Connection.transaction(connection, &GenServer.call(&1, :state))
   end
 end

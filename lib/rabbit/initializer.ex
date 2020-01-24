@@ -145,7 +145,7 @@ defmodule Rabbit.Initializer do
 
     * `:name` - The name of the exchange.
     * `:type` - The type of the exchange - one of `:direct`, `:fanout`, `:topic`,
-      `:match` or `:headers` - defaults to `:direct`.
+      `:match` or `:headers` - defaults to `:direct`. Custom types can also be provided.
     * `:durable` - Whether the exchange is durable across broker restarts - defaults to `false`.
     * `:auto_delete` - Deletes the exchange once all queues unbind from it - defaults to `false`.
     * `:passive` - Returns an error if the exchange does not already exist - defaults to `false`.

@@ -101,6 +101,14 @@ defmodule Rabbit.Consumer do
   @type options :: [option()]
   @type delivery_tag :: non_neg_integer()
   @type action_options :: [{:multiple, boolean()} | {:requeue, boolean()}]
+  @type message_response ::
+          {:ack, Rabbit.Message.t()}
+          | {:ack, Rabbit.Message.t(), action_options()}
+          | {:nack, Rabbit.Message.t()}
+          | {:nack, Rabbit.Message.t(), action_options()}
+          | {:reject, Rabbit.Message.t()}
+          | {:reject, Rabbit.Message.t(), action_options()}
+          | any()
 
   @doc """
   A callback executed when the consumer is started.
@@ -154,14 +162,7 @@ defmodule Rabbit.Consumer do
   will need to manually ack, nack or reject the message if required. Please
   see the `Rabbit.Message` module for more information.
   """
-  @callback handle_message(message :: Rabbit.Message.t()) ::
-              {:ack, Rabbit.Message.t()}
-              | {:ack, Rabbit.Message.t(), action_options()}
-              | {:nack, Rabbit.Message.t()}
-              | {:nack, Rabbit.Message.t(), action_options()}
-              | {:reject, Rabbit.Message.t()}
-              | {:reject, Rabbit.Message.t(), action_options()}
-              | any()
+  @callback handle_message(message :: Rabbit.Message.t()) :: message_response()
 
   @doc """
   A callback executed to handle message exceptions.
@@ -172,14 +173,7 @@ defmodule Rabbit.Consumer do
 
   You may choose to return the same values as `c:handle_message/1`.
   """
-  @callback handle_error(message :: Rabbit.Message.t()) ::
-              {:ack, Rabbit.Message.t()}
-              | {:ack, Rabbit.Message.t(), action_options()}
-              | {:nack, Rabbit.Message.t()}
-              | {:nack, Rabbit.Message.t(), action_options()}
-              | {:reject, Rabbit.Message.t()}
-              | {:reject, Rabbit.Message.t(), action_options()}
-              | any()
+  @callback handle_error(message :: Rabbit.Message.t()) :: message_response()
 
   @optional_callbacks handle_setup: 2
 

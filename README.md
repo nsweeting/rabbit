@@ -26,6 +26,9 @@ Please see [HexDocs](https://hexdocs.pm/rabbit) for additional documentation.
 Connections form the basis of any application that is working with RabbitMQ. A
 connection module is needed by all the other modules included with Rabbit.
 
+Upon start, a connection will automatically create a pool of RabbitMQ connections
+to utilize.
+
 ```elixir
 defmodule MyConnection do
   use Rabbit.Connection
@@ -37,8 +40,13 @@ defmodule MyConnection do
   # Callbacks
 
   @impl Rabbit.Connection
+  def init(:connection_pool, opts) do
+    # Perform runtime pool config
+    {:ok, opts}
+  end
+
   def init(:connection, opts) do
-    # Perform runtime config
+    # Perform runtime connection config
     uri = System.get_env("RABBITMQ_URI") || "amqp://guest:guest@127.0.0.1:5672"
     opts = Keyword.put(opts, :uri, uri)
 
@@ -118,8 +126,8 @@ defmodule MyConsumerSupervisor do
   def init(:consumer_supervisor, _consumers) do
     # Perform runtime config for the consumer supervisor
     consumers = [
-      [connection: MyConnection, queue: "my_queue1", prefetch_count: 5],
-      [connection: MyConnection, queue: "my_queue2", prefetch_count: 10],
+      [connection: MyConnection, queue: "my_queue", prefetch_count: 5],
+      [connection: MyConnection, queue: "my_queue_2", prefetch_count: 10],
     ]
 
     {:ok, consumers}
@@ -157,8 +165,10 @@ MyConsumerSupervisor.start_link()
 ## [Producers](https://hexdocs.pm/rabbit/Rabbit.Producer.html)
 
 In order to publish messages to RabbitMQ, we must create a producer module. They
-must be provided a connection module. The producer will then automatically create
-a pool of channels to publish from.
+must be provided a connection module.
+
+Upon start, a producer will automatically create a pool of RabbitMQ channels
+to publish from.
 
 You can optionally implement the `handle_setup/1` callback to perform any work
 needed to declare queues/exchanges/bindings.
@@ -218,16 +228,74 @@ end
 MyInitializer.start_link(
   connection: MyConnection,
   queues: [
-    [name: "my_queue_1"],
+    [name: "my_queue", durable: true],
     [name: "my_queue_2", durable: true],
   ],
   exchanges: [
-    [name: "my_exchange_1"],
+    [name: "my_exchange"],
     [name: "my_exchange_2", type: :fanout, durable: true],
   ],
   bindings: [
-    [type: :queue, source: "my_exchange_1", destination: "my_queue_1", routing_key: "my_key"],
+    [type: :queue, source: "my_exchange", destination: "my_queue", routing_key: "my_key"],
     [type: :exchange, source: "my_exchange_2", destination: "my_exchange_1"]
   ]
 )
+```
+
+## [Brokers](https://hexdocs.pm/rabbit/Rabbit.Broker.html)
+
+Brokers encapsulate all of the above components into a single easy-to-use module.
+It provides a single place to handle your RabbitMQ connections, intialization,
+producers and consumers.
+
+
+```elixir
+defmodule MyBroker do
+  use Rabbit.Broker
+
+  def start_link(opts \\ []) do
+    Rabbit.Broker.start_link(__MODULE__, opts, name: __MODULE__)
+  end
+
+  # Callbacks
+
+  @impl Rabbit.Broker
+  # Perform runtime configuration per component
+  def init(:connection_pool, opts), do: {:ok, opts}
+  def init(:connection, opts), do: {:ok, opts}
+  def init(:initializer, opts), do: {:ok, opts}
+  def init(:producer_pool, opts), do: {:ok, opts}
+  def init(:producer, opts), do: {:ok, opts}
+  def init(:consumer_supervisor, opts), do: {:ok, opts}
+  def init(:consumer, opts), do: {:ok, opts}
+
+  @impl Rabbit.Broker
+  def handle_message(message) do
+    # Handle message consumption per consumer
+    IO.inspect(message.payload)
+    {:ack, message}
+  end
+
+  @impl Rabbit.Broker
+  def handle_error(message) do
+    # Handle message errors per consumer
+    {:nack, message}
+  end
+end
+
+MyBroker.start_link(
+  connection: [uri: "amqp://guest:guest@127.0.0.1:5672"],
+  initializer: [
+    queues: [
+      [name: "my_queue", durable: true],
+      [name: "my_queue_2", durable: true]
+    ]
+  ],
+  producer: [pool_size: 10],
+  consumers: [
+    [queue: "my_queue"],
+    [queue: "my_queue_2", prefetch_count: 10]
+  ]
+)
+Rabbit.Broker.publish(MyBroker, "", "my_queue", "hello")
 ```
