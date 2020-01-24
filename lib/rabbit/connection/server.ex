@@ -122,6 +122,11 @@ defmodule Rabbit.Connection.Server do
     {:reply, state.connection_open, state}
   end
 
+  def handle_call(:disconnect, _from, state) do
+    state = disconnect(state)
+    {:reply, :ok, state}
+  end
+
   def handle_call({:subscribe, subscriber}, _from, state) do
     state = subscribe(state, subscriber)
     {:reply, :ok, state}

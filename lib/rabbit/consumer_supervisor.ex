@@ -128,28 +128,16 @@ defmodule Rabbit.ConsumerSupervisor do
 
   Please see `c:Rabbit.Consumer.handle_message/1` for more information.
   """
-  @callback handle_message(message :: Rabbit.Message.t()) ::
-              {:ack, Rabbit.Message.t()}
-              | {:ack, Rabbit.Message.t(), Rabbit.Consumer.action_options()}
-              | {:nack, Rabbit.Message.t()}
-              | {:nack, Rabbit.Message.t(), Rabbit.Consumer.action_options()}
-              | {:reject, Rabbit.Message.t()}
-              | {:reject, Rabbit.Message.t(), Rabbit.Consumer.action_options()}
-              | any()
+  @callback handle_message(message :: Rabbit.Message.t()) :: Rabbit.Consumer.message_response()
 
   @doc """
   A callback executed by each consumer to handle message exceptions.
 
   Please see `c:Rabbit.Consumer.handle_error/1` for more information.
   """
-  @callback handle_error(message :: Rabbit.Message.t()) ::
-              {:ack, Rabbit.Message.t()}
-              | {:ack, Rabbit.Message.t(), Rabbit.Consumer.action_options()}
-              | {:nack, Rabbit.Message.t()}
-              | {:nack, Rabbit.Message.t(), Rabbit.Consumer.action_options()}
-              | {:reject, Rabbit.Message.t()}
-              | {:reject, Rabbit.Message.t(), Rabbit.Consumer.action_options()}
-              | any()
+  @callback handle_error(message :: Rabbit.Message.t()) :: Rabbit.Consumer.message_response()
+
+  @optional_callbacks handle_setup: 2
 
   ################################
   # Public API

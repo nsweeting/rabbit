@@ -75,27 +75,17 @@ defmodule Rabbit.Producer do
   @type t :: GenServer.name()
   @type option ::
           {:connection, Rabbit.Connection.t()}
+          | {:pool_size, non_neg_integer()}
+          | {:max_overflow, non_neg_integer()}
+          | {:strategy, :lifo | :fifo}
           | {:sync_start, boolean()}
           | {:sync_start_delay, non_neg_integer()}
           | {:sync_start_max, non_neg_integer()}
-          | {:pool_size, non_neg_integer()}
-          | {:max_overflow, non_neg_integer()}
           | {:publish_opts, publish_options()}
   @type options :: [option()]
   @type exchange :: String.t()
   @type routing_key :: String.t()
   @type message :: term()
-  @type producer_option ::
-          {:connection, Rabbit.Connection.t()}
-          | {:sync_start, boolean()}
-          | {:sync_start_delay, non_neg_integer()}
-          | {:sync_start_max, non_neg_integer()}
-          | {:publish_opts, publish_options()}
-  @type producer_options :: [producer_option()]
-  @type pool_option ::
-          {:pool_size, non_neg_integer()}
-          | {:max_overflow, non_neg_integer()}
-  @type pool_options :: [pool_option()]
   @type publish_option ::
           {:mandatory, boolean()}
           | {:immediate, boolean()}
@@ -115,7 +105,7 @@ defmodule Rabbit.Producer do
   @type publish_options :: [publish_option()]
 
   @doc """
-  A callback executed by each component of the producer.
+  A callback executed by each component of the producer pool.
 
   Two versions of the callback must be created. One for the pool, and one
   for the producers. The first argument differentiates the callback.
@@ -136,11 +126,10 @@ defmodule Rabbit.Producer do
   Returning `:ignore` will cause `start_link/3` to return `:ignore` and the process
   will exit normally without entering the loop
   """
-  @callback init(:producer_pool | :producer, options()) ::
-              {:ok, pool_options() | producer_options()} | :ignore
+  @callback init(:producer_pool | :producer, options()) :: {:ok, options()} | :ignore
 
   @doc """
-  An optional callback executed after the channel is open.
+  An optional callback executed after the channel is open for each producer.
 
   The callback is called with an `AMQP.Channel`. At the most basic, you may want
   to declare queues that you will be publishing to.
@@ -152,7 +141,7 @@ defmodule Rabbit.Producer do
       end
 
   The callback must return an `:ok` atom - otherise it will be marked as failed,
-  and the consumer will attempt to go through the connection setup process again.
+  and the producer will attempt to go through the channel setup process again.
 
   Alternatively, you could use a `Rabbit.Initializer` process to perform this
   setup work. Please see its docs for more information.
@@ -171,10 +160,12 @@ defmodule Rabbit.Producer do
   ## Options
 
     * `:connection` - A `Rabbit.Connection` process.
-    * `:pool_size` - The number of processes to create for publishing - defaults to `1`.
+    * `:pool_size` - The number of processes to create for producers - defaults to `1`.
       Each process consumes a RabbitMQ channel.
     * `:max_overflow` - Maximum number of temporary workers created when the pool
       is empty - defaults to `0`.
+    * `:stratgey` - Determines whether checked in workers should be placed first
+      or last in the line of available workers - defaults to `:lifo`.
     * `:sync_start` - Boolean representing whether to establish the connection
       and channel syncronously - defaults to `true`.
     * `:sync_start_delay` - The amount of time in milliseconds to sleep between
@@ -194,6 +185,16 @@ defmodule Rabbit.Producer do
           Supervisor.on_start()
   def start_link(module, opts \\ [], server_opts \\ []) do
     Producer.Pool.start_link(module, opts, server_opts)
+  end
+
+  @doc """
+  Runs the given function inside a transaction.
+
+  The function must accept a producer child pid.
+  """
+  @spec transaction(Rabbit.Producer.t(), (Rabbit.Prodcuer.t() -> any())) :: any()
+  def transaction(producer, fun) do
+    :poolboy.transaction(producer, &fun.(&1))
   end
 
   @doc """
