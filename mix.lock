@@ -15,7 +15,7 @@
   "inch_ex": {:git, "https://github.com/rrrene/inch_ex.git", "c8eeaa65312df3ce150e91d7dddb50e2983b3209", []},
   "jason": {:hex, :jason, "1.2.1", "12b22825e22f468c02eb3e4b9985f3d0cb8dc40b9bd704730efa11abd2708c44", [:mix], [{:decimal, "~> 1.0", [hex: :decimal, repo: "hexpm", optional: true]}], "hexpm"},
   "jsx": {:hex, :jsx, "2.9.0", "d2f6e5f069c00266cad52fb15d87c428579ea4d7d73a33669e12679e203329dd", [:mix, :rebar3], [], "hexpm"},
-  "keyword_validator": {:hex, :keyword_validator, "1.0.0", "a1421d0ae47ff3638b45b695427a00302ca278b869b9d9f9f22d4da5e0f4d660", [:mix], [], "hexpm"},
+  "keyword_validator": {:hex, :keyword_validator, "1.0.1", "1aef6705d306677d59c59fff9c3b7e1f70b161900af400a7b784cdfc042c0cb3", [:mix], [], "hexpm"},
   "lager": {:hex, :lager, "3.8.0", "3402b9a7e473680ca179fc2f1d827cab88dd37dd1e6113090c6f45ef05228a1c", [:rebar3], [{:goldrush, "0.1.9", [hex: :goldrush, repo: "hexpm", optional: false]}], "hexpm"},
   "makeup": {:hex, :makeup, "1.0.3", "e339e2f766d12e7260e6672dd4047405963c5ec99661abdc432e6ec67d29ef95", [:mix], [{:nimble_parsec, "~> 0.5", [hex: :nimble_parsec, repo: "hexpm", optional: false]}], "hexpm"},
   "makeup_elixir": {:hex, :makeup_elixir, "0.14.1", "4f0e96847c63c17841d42c08107405a005a2680eb9c7ccadfd757bd31dabccfb", [:mix], [{:makeup, "~> 1.0", [hex: :makeup, repo: "hexpm", optional: false]}], "hexpm"},
