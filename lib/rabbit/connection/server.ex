@@ -27,6 +27,7 @@ defmodule Rabbit.Connection.Server do
   }
 
   @connection_opts [
+    :name,
     :username,
     :password,
     :virtual_host,
@@ -145,7 +146,6 @@ defmodule Rabbit.Connection.Server do
     %{
       name: process_name(self()),
       connection_uri: Keyword.get(opts, :uri),
-      connection_name: Keyword.get(opts, :name, :undefined),
       connection_opts: Keyword.take(opts, @connection_opts),
       connection: nil,
       connection_open: false,
@@ -179,15 +179,11 @@ defmodule Rabbit.Connection.Server do
 
   defp do_connect(%{connection_uri: nil} = state) do
     opts = Keyword.merge(@default_connection_opts, state.connection_opts)
-    AMQP.Connection.open(opts, state.connection_name)
+    AMQP.Connection.open(opts)
   end
 
   defp do_connect(state) do
-    AMQP.Connection.open(
-      state.connection_uri,
-      state.connection_name,
-      state.connection_opts
-    )
+    AMQP.Connection.open(state.connection_uri, state.connection_opts)
   end
 
   defp disconnect(%{connection_open: false} = state), do: state
