@@ -54,12 +54,12 @@ defmodule Rabbit.MixProject do
       {:amqp, "~> 1.5"},
       {:poolboy, "~> 1.5"},
       {:keyword_validator, "~> 1.0"},
-      {:jason, "~> 1.1", optional: true},
+      {:jason, "~> 1.2", optional: true},
       {:benchee, "~> 1.0", only: :dev, runtime: false},
-      {:dialyxir, "~> 0.5", only: [:dev, :test], runtime: false},
-      {:credo, "~> 1.1", only: [:dev, :test], runtime: false},
+      {:dialyxir, "~> 1.0", only: [:dev, :test], runtime: false},
+      {:credo, "~> 1.4", only: [:dev, :test], runtime: false},
       {:inch_ex, github: "rrrene/inch_ex", only: [:dev, :test], runtime: false},
-      {:ex_doc, "~> 0.20", only: :dev, runtime: false}
+      {:ex_doc, "~> 0.22", only: :dev, runtime: false}
     ]
   end
 end
