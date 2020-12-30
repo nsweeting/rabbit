@@ -12,7 +12,7 @@ The package can be installed by adding `rabbit` to your list of dependencies in 
 ```elixir
 def deps do
   [
-    {:rabbit, "~> 0.10"}
+    {:rabbit, "~> 0.11"}
   ]
 end
 ```
@@ -199,33 +199,33 @@ MyProducer.start_link(connection: MyConnection)
 Rabbit.Producer.publish(MyProducer, "", "my_queue", "hello")
 ```
 
-## [Initializers](https://hexdocs.pm/rabbit/Rabbit.Initializer.html)
+## [Topology](https://hexdocs.pm/rabbit/Rabbit.Topology.html)
 
-Initializers provide a way to centralize any RabbitMQ setup required by your 
+Topology provides a way to centralize any RabbitMQ setup required by your
 application. In that sense, it should be started BEFORE any of your producers
 or consumers.
 
-Using an initializer, you can automatically setup queues, exchanges and bindings
+Using a topology, you can automatically setup queues, exchanges and bindings
 with simple keyword lists.
 
 ```elixir
-defmodule MyInitializer do
-  use Rabbit.Initializer
+defmodule MyTopology do
+  use Rabbit.Topology
 
   def start_link(opts \\ []) do
-    Rabbit.Initializer.start_link(__MODULE__, opts, name: __MODULE__)
+    Rabbit.Topology.start_link(__MODULE__, opts, name: __MODULE__)
   end
 
   # Callbacks
 
-  @impl Rabbit.Initializer
-  def init(:initializer, opts) do
+  @impl Rabbit.Topology
+  def init(:topology, opts) do
     # Perform runtime config
     {:ok, opts}
   end
 end
 
-MyInitializer.start_link(
+MyTopology.start_link(
   connection: MyConnection,
   queues: [
     [name: "my_queue", durable: true],
@@ -245,9 +245,8 @@ MyInitializer.start_link(
 ## [Brokers](https://hexdocs.pm/rabbit/Rabbit.Broker.html)
 
 Brokers encapsulate all of the above components into a single easy-to-use module.
-It provides a single place to handle your RabbitMQ connections, intialization,
+It provides a single place to handle your RabbitMQ connections, topology,
 producers and consumers.
-
 
 ```elixir
 defmodule MyBroker do
@@ -263,7 +262,7 @@ defmodule MyBroker do
   # Perform runtime configuration per component
   def init(:connection_pool, opts), do: {:ok, opts}
   def init(:connection, opts), do: {:ok, opts}
-  def init(:initializer, opts), do: {:ok, opts}
+  def init(:topology, opts), do: {:ok, opts}
   def init(:producer_pool, opts), do: {:ok, opts}
   def init(:producer, opts), do: {:ok, opts}
   def init(:consumer_supervisor, opts), do: {:ok, opts}
@@ -285,7 +284,7 @@ end
 
 MyBroker.start_link(
   connection: [uri: "amqp://guest:guest@127.0.0.1:5672"],
-  initializer: [
+  topology: [
     queues: [
       [name: "my_queue", durable: true],
       [name: "my_queue_2", durable: true]
