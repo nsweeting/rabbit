@@ -103,7 +103,7 @@ defmodule Rabbit.ConsumerTest do
   end
 
   test "will consume messages", meta do
-    assert {:ok, consumer, queue} = start_consumer(meta)
+    assert {:ok, _consumer, queue} = start_consumer(meta)
 
     ref = publish_message(meta, queue)
 
@@ -111,7 +111,7 @@ defmodule Rabbit.ConsumerTest do
   end
 
   test "will consume messages with prefetch_count", meta do
-    assert {:ok, consumer, queue} = start_consumer(meta, prefetch_count: 3)
+    assert {:ok, _consumer, queue} = start_consumer(meta, prefetch_count: 3)
 
     ref1 = publish_message(meta, queue)
     ref2 = publish_message(meta, queue)
@@ -146,7 +146,7 @@ defmodule Rabbit.ConsumerTest do
     :timer.sleep(50)
 
     assert AMQP.Queue.message_count(channel, queue) == 1
-    assert {:ok, consumer, queue} = start_consumer(meta, queue: queue)
+    assert {:ok, _consumer, queue} = start_consumer(meta, queue: queue)
     assert AMQP.Queue.message_count(channel, queue) == 0
   end
 

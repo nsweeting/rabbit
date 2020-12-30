@@ -36,12 +36,12 @@ defmodule Rabbit.BrokerTest do
     end
 
     test "starts a broker with connection opts" do
-      assert {:ok, broker} = start_supervised({TestBroker, [connection: [pool_size: 1]]})
+      assert {:ok, _broker} = start_supervised({TestBroker, [connection: [pool_size: 1]]})
       assert [_] = GenServer.call(TestBroker.Connection, :get_avail_workers)
 
       stop_supervised(TestBroker)
 
-      assert {:ok, broker} = start_supervised({TestBroker, [connection: [pool_size: 3]]})
+      assert {:ok, _broker} = start_supervised({TestBroker, [connection: [pool_size: 3]]})
       assert [_, _, _] = GenServer.call(TestBroker.Connection, :get_avail_workers)
     end
   end
