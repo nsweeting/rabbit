@@ -34,7 +34,7 @@ defmodule Rabbit.ConnectionTest do
     end
 
     test "starts a connection with name" do
-      assert {:ok, connection} = Connection.start_link(TestConnection, [], name: :foo)
+      assert {:ok, _connection} = Connection.start_link(TestConnection, [], name: :foo)
       assert true = Connection.alive?(:foo)
     end
 

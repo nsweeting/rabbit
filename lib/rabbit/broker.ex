@@ -6,7 +6,7 @@ defmodule Rabbit.Broker do
   in Rabbit into a single entity. It provides the following:
 
   * Durable connection pooling through `Rabbit.Connection`.
-  * Automatic broker configuration through `Rabbit.Initializer`.
+  * Automatic broker configuration through `Rabbit.Topology`.
   * Simple message publishing through `Rabbit.Producer`.
   * Simple message consumption through `Rabbit.ConsumerSupervisor`.
 
@@ -52,7 +52,7 @@ defmodule Rabbit.Broker do
       # Start the broker
       MyBroker.start_link(
         connection: [uri: "amqp://guest:guest@127.0.0.1:5672"],
-        initializer: [
+        topology: [
           queues: [[name: "foo"], [name: "bar"]]
         ],
         producer: [pool_size: 10],
@@ -65,7 +65,7 @@ defmodule Rabbit.Broker do
   @type t :: module()
   @type option ::
           {:connection, Rabbit.Connection.options()}
-          | {:initializer, Rabbit.Initializer.options()}
+          | {:topology, Rabbit.Topology.options()}
           | {:producer, Rabbit.Producer.options()}
           | {:consumers, Rabbit.ConsumerSupervisor.consumers()}
   @type options :: [option()]
@@ -78,7 +78,7 @@ defmodule Rabbit.Broker do
 
   * `:connection_pool` - Callback for the connection pool.
   * `:connection` - Callback for each connection in the pool.
-  * `:initializer` - Callback for the initializer.
+  * `:topology` - Callback for the topology.
   * `:producer_pool` - Callback for the producer pool.
   * `:producer` - Callback for each producer in the pool.
   * `:consumer_supervisor` - Callback for the consumer supervisor.
@@ -94,8 +94,8 @@ defmodule Rabbit.Broker do
           {:ok, opts}
         end
 
-        # Initialize the initializer
-        def init(:initializer, opts) do
+        # Initialize the topology
+        def init(:topology, opts) do
           {:ok, opts}
         end
 
@@ -110,7 +110,7 @@ defmodule Rabbit.Broker do
   @callback init(
               :connection_pool
               | :connection
-              | :initializer
+              | :topology
               | :producer_pool
               | :producer
               | :consumer_supervisor
@@ -142,7 +142,7 @@ defmodule Rabbit.Broker do
   ## Options
 
     * `:connection` - A keyword list of `t:Rabbit.Connection.option/0`.
-    * `:initializer` - A keyword list of `t:Rabbit.Initializer.option/0`.
+    * `:topology` - A keyword list of `t:Rabbit.Topology.option/0`.
     * `:producer` - A keyword list of `t:Rabbit.Producer.option/0`.
     * `:consumers` - A list of `t:Rabbit.ConsumerSupervisor.consumers/0`.
 
@@ -189,7 +189,7 @@ defmodule Rabbit.Broker do
   def connection(module), do: Module.concat(module, Connection)
 
   @doc false
-  def initializer(module), do: Module.concat(module, Initializer)
+  def topology(module), do: Module.concat(module, Topology)
 
   @doc false
   def producer(module), do: Module.concat(module, Producer)

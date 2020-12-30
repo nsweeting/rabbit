@@ -24,7 +24,7 @@ defmodule Rabbit.Broker.Supervisor do
     children =
       []
       |> with_connection(args)
-      |> with_initializer(args)
+      |> with_toplogy(args)
       |> with_producer(args)
       |> with_consumers(args)
 
@@ -43,12 +43,13 @@ defmodule Rabbit.Broker.Supervisor do
     children ++ [spec]
   end
 
-  defp with_initializer(children, {module, opts}) do
+  defp with_toplogy(children, {module, opts}) do
     conn = Broker.connection(module)
-    name = Broker.initializer(module)
-    opts = Keyword.get(opts, :initializer, [])
+    name = Broker.topology(module)
+    # Temporary support for old initializer keyword
+    opts = Keyword.get(opts, :initializer) || Keyword.get(opts, :topology, [])
     opts = Keyword.put(opts, :connection, conn)
-    spec = build_spec(Rabbit.Initializer.Server, name, module, opts)
+    spec = build_spec(Rabbit.Topology.Server, name, module, opts)
 
     children ++ [spec]
   end

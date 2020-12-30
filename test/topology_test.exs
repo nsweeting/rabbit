@@ -1,7 +1,7 @@
-defmodule Rabbit.InitializerTest do
+defmodule Rabbit.TopologyTest do
   use ExUnit.Case, async: false
 
-  alias Rabbit.{Connection, Consumer, Initializer, Producer}
+  alias Rabbit.{Connection, Consumer, Producer, Topology}
 
   defmodule TestConnection do
     use Rabbit.Connection
@@ -43,11 +43,11 @@ defmodule Rabbit.InitializerTest do
     end
   end
 
-  defmodule TestInitializer do
-    use Rabbit.Initializer
+  defmodule TestTopology do
+    use Rabbit.Topology
 
-    @impl Rabbit.Initializer
-    def init(:initializer, opts) do
+    @impl Rabbit.Topology
+    def init(:topology, opts) do
       {:ok, opts}
     end
   end
@@ -95,7 +95,7 @@ defmodule Rabbit.InitializerTest do
   end
 
   describe "start_link/3" do
-    test "starts an initializer", meta do
+    test "starts a topology", meta do
       queue = random_name()
       exchange = random_name()
       routing_key = random_name()
@@ -113,8 +113,8 @@ defmodule Rabbit.InitializerTest do
         ]
       ]
 
-      assert {:ok, _} = Initializer.start_link(TestInitializer, opts)
-      assert {:ok, consumer} = start_consumer(meta, queue)
+      assert {:ok, _} = Topology.start_link(TestTopology, opts)
+      assert {:ok, _consumer} = start_consumer(meta, queue)
 
       ref = publish_message(meta, exchange, routing_key)
 
@@ -125,11 +125,11 @@ defmodule Rabbit.InitializerTest do
       {:ok, connection} = TestBadConnection.start_link()
 
       assert {:error, :no_connection} =
-               Initializer.start_link(TestInitializer, connection: connection, retry_max: 1)
+               Topology.start_link(TestTopology, connection: connection, retry_max: 1)
     end
 
-    test "returns error when given bad initializer options" do
-      assert {:error, _} = Initializer.start_link(TestInitializer, connection: 1)
+    test "returns error when given bad topology options" do
+      assert {:error, _} = Topology.start_link(TestTopology, connection: 1)
     end
   end
 

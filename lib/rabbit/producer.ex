@@ -143,7 +143,7 @@ defmodule Rabbit.Producer do
   The callback must return an `:ok` atom - otherise it will be marked as failed,
   and the producer will attempt to go through the channel setup process again.
 
-  Alternatively, you could use a `Rabbit.Initializer` process to perform this
+  Alternatively, you could use a `Rabbit.Topology` process to perform this
   setup work. Please see its docs for more information.
   """
   @callback handle_setup(channel :: AMQP.Channel.t()) :: :ok | :error

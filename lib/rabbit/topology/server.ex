@@ -1,4 +1,4 @@
-defmodule Rabbit.Initializer.Server do
+defmodule Rabbit.Topology.Server do
   @moduledoc false
 
   use GenServer
@@ -62,10 +62,10 @@ defmodule Rabbit.Initializer.Server do
   @doc false
   @impl GenServer
   def init({module, opts}) do
-    with {:ok, opts} <- module.init(:initializer, opts),
+    with {:ok, opts} <- module.init(:topology, opts),
          {:ok, opts} <- validate_opts(opts, @opts_schema) do
       state = init_state(opts)
-      initialize(state)
+      setup_topology(state)
     end
   end
 
@@ -77,7 +77,7 @@ defmodule Rabbit.Initializer.Server do
     Enum.into(opts, %{})
   end
 
-  defp initialize(state) do
+  defp setup_topology(state) do
     with {:ok, connection} <- connection(state),
          {:ok, channel} <- channel(state, connection),
          :ok <- declare_exchanges(state.exchanges, channel),
@@ -189,7 +189,7 @@ defmodule Rabbit.Initializer.Server do
 
   defp log_error(error) do
     Logger.error("""
-    [Rabbit.Initializer] #{inspect(process_name(self()))}: initializer error.
+    [Rabbit.Topology] #{inspect(process_name(self()))}: setup error.
     Detail: #{inspect(error)}
     """)
   end

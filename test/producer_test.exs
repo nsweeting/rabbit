@@ -134,7 +134,7 @@ defmodule Rabbit.ProducerTest do
     end
 
     assert {:ok, connection} = Connection.start_link(TestConnection)
-    assert {:ok, producer} = Producer.start_link(TestProducerTwo, connection: connection)
+    assert {:ok, _producer} = Producer.start_link(TestProducerTwo, connection: connection)
     assert_receive :init_callback
   end
 
@@ -156,7 +156,7 @@ defmodule Rabbit.ProducerTest do
     end
 
     assert {:ok, connection} = Connection.start_link(TestConnection)
-    assert {:ok, producer} = Producer.start_link(TestProducerThree, connection: connection)
+    assert {:ok, _producer} = Producer.start_link(TestProducerThree, connection: connection)
     assert_receive :init_callback
   end
 
@@ -179,7 +179,7 @@ defmodule Rabbit.ProducerTest do
     end
 
     assert {:ok, connection} = Connection.start_link(TestConnection)
-    assert {:ok, producer} = Producer.start_link(TestProducerFour, connection: connection)
+    assert {:ok, _producer} = Producer.start_link(TestProducerFour, connection: connection)
     assert_receive :handle_setup_callback
   end
 

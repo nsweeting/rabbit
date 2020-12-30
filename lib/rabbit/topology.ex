@@ -1,10 +1,10 @@
-defmodule Rabbit.Initializer do
+defmodule Rabbit.Topology do
   @moduledoc """
-  A RabbitMQ initializer process.
+  A RabbitMQ topology process.
 
   This is a blocking process that can be used to declare exchanges, queues, and
-  bindings. It will perform any setup required by your application. It should be
-  added to your supervision tree before any producers or consumers.
+  bindings. Basically - performing any RabbitMQ setup required by your application.
+  It should be added to your supervision tree before any producers or consumers.
 
   Both `Rabbit.Consumer` and `Rabbit.ConsumerSupervisor` have the `handle_setup/2`
   callback, which can be used to perform any queue, exchange or binding work as
@@ -29,17 +29,17 @@ defmodule Rabbit.Initializer do
         end
       end
 
-      # This is an initializer
-      defmodule MyInitializer do
-        use Rabbit.Initializer
+      # This is a topology
+      defmodule MyTopology do
+        use Rabbit.Topology
 
         def start_link(opts \\ []) do
-          Rabbit.Initializer.start_link(__MODULE__, opts, name: __MODULE__)
+          Rabbit.Topology.start_link(__MODULE__, opts, name: __MODULE__)
         end
 
         # Callbacks
 
-        @impl Rabbit.Initializer
+        @impl Rabbit.Topology
         def init(_type, opts) do
           # Perform any runtime configuration
           {:ok, opts}
@@ -49,8 +49,8 @@ defmodule Rabbit.Initializer do
       # Start the connection
       MyConnection.start_link()
 
-      # Start the initializer
-      MyInitializer.start_link(
+      # Start the topology
+      MyTopology.start_link(
         connection: MyConnection,
         exchanges: [
           [name: "my_exchange_1"],
@@ -67,7 +67,7 @@ defmodule Rabbit.Initializer do
       )
 
   """
-  alias Rabbit.Initializer
+  alias Rabbit.Topology
 
   @type t :: GenServer.name()
   @type exchange ::
@@ -110,7 +110,7 @@ defmodule Rabbit.Initializer do
   @type options :: [option()]
 
   @doc """
-  A callback executed when the initializer is started.
+  A callback executed when the topology is started.
 
   Returning `{:ok, opts}` - where `opts` is a keyword list of `t:option/0` will
   cause `start_link/3` to return `{:ok, pid}` and the process to enter its loop.
@@ -118,14 +118,14 @@ defmodule Rabbit.Initializer do
   Returning `:ignore` will cause `start_link/3` to return `:ignore` and the process
   will exit normally without entering the loop
   """
-  @callback init(:initializer, options()) :: {:ok, options()} | :ignore
+  @callback init(:topology, options()) :: {:ok, options()} | :ignore
 
   ################################
   # Public API
   ################################
 
   @doc """
-  Starts an initializer process.
+  Starts a toplogy process.
 
   ## Options
 
@@ -203,16 +203,16 @@ defmodule Rabbit.Initializer do
   """
   @spec start_link(module(), list(), GenServer.options()) :: Supervisor.on_start()
   def start_link(module, opts \\ [], server_opts \\ []) do
-    Initializer.Server.start_link(module, opts, server_opts)
+    Topology.Server.start_link(module, opts, server_opts)
   end
 
   defmacro __using__(opts) do
     quote location: :keep do
-      @behaviour Rabbit.Initializer
+      @behaviour Rabbit.Topology
 
       if Module.get_attribute(__MODULE__, :doc) == nil do
         @doc """
-        Returns a specification to start this consumer under a supervisor.
+        Returns a specification to start the topology under a supervisor.
         See `Supervisor`.
         """
       end
