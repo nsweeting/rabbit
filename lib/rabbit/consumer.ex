@@ -98,6 +98,7 @@ defmodule Rabbit.Consumer do
           | {:exclusive, boolean()}
           | {:no_wait, boolean()}
           | {:arguments, Keyword.t()}
+          | {:custom_meta, map()}
   @type options :: [option()]
   @type delivery_tag :: non_neg_integer()
   @type action_options :: [{:multiple, boolean()} | {:requeue, boolean()}]
@@ -201,7 +202,9 @@ defmodule Rabbit.Consumer do
       the queue - defaults to `false`.
     * `:no_wait` - A boolean representing whether the server should not respond to
       methods - defaults to `false`.
-    * `:arguments` - A set of arguments for the consume.
+    * `:arguments` - A set of arguments for the consumer.
+    * `:custom_meta` - A map of custom data that will be included in each `Rabbit.Message`
+      handled by the consumer.
 
   ## Server Options
 

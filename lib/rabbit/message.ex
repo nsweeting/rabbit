@@ -13,6 +13,7 @@ defmodule Rabbit.Message do
   * `:decoded_payload` - If the message has a content type - this will be the
     payload decoded using the applicable serializer.
   * `:meta` - The metadata sent when publishing or set by the broker.
+  * `:custom_meta` - The custom metadata included when starting a consumer.
   * `:error_reason` - The reason for any error that occurs during the message
     handling callback.
   * `:error_stack` - The stacktrace that might accompany the error.
@@ -26,6 +27,7 @@ defmodule Rabbit.Message do
     :payload,
     :decoded_payload,
     :meta,
+    :custom_meta,
     :error_reason,
     :error_stack
   ]
@@ -37,6 +39,7 @@ defmodule Rabbit.Message do
           payload: binary(),
           decoded_payload: any(),
           meta: map(),
+          custom_meta: map(),
           error_reason: any(),
           error_stack: nil | list()
         }
@@ -44,14 +47,16 @@ defmodule Rabbit.Message do
   @doc """
   Creates a new message struct.
   """
-  @spec new(Rabbit.Consumer.t(), module(), AMQP.Channel.t(), any(), map()) :: Rabbit.Message.t()
-  def new(consumer, module, channel, payload, meta) do
+  @spec new(Rabbit.Consumer.t(), module(), AMQP.Channel.t(), any(), map(), map()) ::
+          Rabbit.Message.t()
+  def new(consumer, module, channel, payload, meta, custom_meta) do
     %__MODULE__{
       consumer: consumer,
       module: module,
       channel: channel,
       payload: payload,
-      meta: meta
+      meta: meta,
+      custom_meta: custom_meta
     }
   end
 
