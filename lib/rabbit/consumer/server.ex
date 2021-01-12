@@ -18,7 +18,8 @@ defmodule Rabbit.Consumer.Server do
     exclusive: [type: :boolean, default: false],
     no_wait: [type: :boolean, default: false],
     arguments: [type: :list, default: []],
-    timeout: [type: [:integer, :atom], required: false]
+    timeout: [type: [:integer, :atom], required: false],
+    custom_meta: [type: :map, default: %{}]
   }
 
   @qos_opts [
@@ -166,7 +167,8 @@ defmodule Rabbit.Consumer.Server do
       queue: Keyword.get(opts, :queue),
       qos_opts: Keyword.take(opts, @qos_opts),
       consume_opts: Keyword.take(opts, @consume_opts),
-      worker_opts: Keyword.take(opts, @worker_opts)
+      worker_opts: Keyword.take(opts, @worker_opts),
+      custom_meta: Keyword.get(opts, :custom_meta)
     }
   end
 
@@ -269,7 +271,16 @@ defmodule Rabbit.Consumer.Server do
   defp calculate_delay(attempt), do: 1000 * attempt
 
   defp handle_message(state, payload, meta) do
-    message = Rabbit.Message.new(state.name, state.module, state.channel, payload, meta)
+    message =
+      Rabbit.Message.new(
+        state.name,
+        state.module,
+        state.channel,
+        payload,
+        meta,
+        state.custom_meta
+      )
+
     Rabbit.Worker.start_child(message, state.worker_opts)
   end
 

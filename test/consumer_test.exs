@@ -42,7 +42,7 @@ defmodule Rabbit.ConsumerTest do
     def handle_message(msg) do
       decoded_payload = Base.decode64!(msg.payload)
       {pid, ref, return} = :erlang.binary_to_term(decoded_payload)
-      send(pid, {:handle_message, ref})
+      send(pid, {:handle_message, ref, msg})
       {return, msg}
     end
 
@@ -107,7 +107,7 @@ defmodule Rabbit.ConsumerTest do
 
     ref = publish_message(meta, queue)
 
-    assert_receive {:handle_message, ^ref}
+    assert_receive {:handle_message, ^ref, _}
   end
 
   test "will consume messages with prefetch_count", meta do
@@ -117,19 +117,21 @@ defmodule Rabbit.ConsumerTest do
     ref2 = publish_message(meta, queue)
     ref3 = publish_message(meta, queue)
 
-    assert_receive {:handle_message, ^ref1}
-    assert_receive {:handle_message, ^ref2}
-    assert_receive {:handle_message, ^ref3}
+    assert_receive {:handle_message, ^ref1, _}
+    assert_receive {:handle_message, ^ref2, _}
+    assert_receive {:handle_message, ^ref3, _}
   end
 
   test "consumer modules use init callback", meta do
     Process.register(self(), :consumer_test)
+
     assert {:ok, _, _} = start_consumer(meta)
     assert_receive :init_callback
   end
 
   test "consumer modules use handle_setup callback", meta do
     Process.register(self(), :consumer_test)
+
     assert {:ok, _, _} = start_consumer(meta)
     assert_receive :handle_setup_callback
   end
@@ -148,6 +150,16 @@ defmodule Rabbit.ConsumerTest do
     assert AMQP.Queue.message_count(channel, queue) == 1
     assert {:ok, _consumer, queue} = start_consumer(meta, queue: queue)
     assert AMQP.Queue.message_count(channel, queue) == 0
+  end
+
+  test "will include custom_meta in the handle_message message", meta do
+    assert {:ok, _consumer, queue} =
+             start_consumer(meta, prefetch_count: 3, custom_meta: %{foo: "bar"})
+
+    ref = publish_message(meta, queue)
+
+    assert_receive {:handle_message, ^ref, msg}
+    assert msg.custom_meta == %{foo: "bar"}
   end
 
   defp start_consumer(meta, opts \\ []) do
