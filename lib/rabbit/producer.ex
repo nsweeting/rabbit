@@ -7,7 +7,7 @@ defmodule Rabbit.Producer do
 
   * Durability during connection and channel failures through use of expotential backoff.
   * Channel pooling for increased publishing performance.
-  * Easy runtime setup through an `c:init/2` and `c:handle_setup/1` callbacks.
+  * Easy runtime setup through an `c:init/2` and `c:handle_setup/1` or `c:handle_setup/2` callbacks.
   * Simplification of standard publishing options.
   * Automatic payload encoding based on available serializers and message
     content type.
@@ -82,6 +82,7 @@ defmodule Rabbit.Producer do
           | {:sync_start_delay, non_neg_integer()}
           | {:sync_start_max, non_neg_integer()}
           | {:publish_opts, publish_options()}
+          | {:setup_opts, setup_options()}
   @type options :: [option()]
   @type exchange :: String.t()
   @type routing_key :: String.t()
@@ -103,6 +104,7 @@ defmodule Rabbit.Producer do
           | {:user_id, String.t()}
           | {:app_id, String.t()}
   @type publish_options :: [publish_option()]
+  @type setup_options :: keyword()
 
   @doc """
   A callback executed by each component of the producer pool.
@@ -148,7 +150,18 @@ defmodule Rabbit.Producer do
   """
   @callback handle_setup(channel :: AMQP.Channel.t()) :: :ok | :error
 
-  @optional_callbacks handle_setup: 1
+  @doc """
+  The same as `handle_setup/1` but includes the current state as a second argument.
+
+  Important keys in the state include:
+
+  * `:connection` - the `Rabbit.Connection` process.
+  * `:channel` - the opened `AMQP.Channel` channel.
+  * `:setup_opts` - options provided undert the key `:setup_opts` to `start_link/3`.
+  """
+  @callback handle_setup(channel :: AMQP.Channel.t(), state :: map()) :: :ok | :error
+
+  @optional_callbacks handle_setup: 1, handle_setup: 2
 
   ################################
   # Public API
@@ -174,6 +187,7 @@ defmodule Rabbit.Producer do
       before proceeding with async start - defaults to `100`.
     * `:publish_opts` - Any `t:publish_option/0` that is automatically set as a
       default option value when calling `publish/6`.
+    * `:setup_opts` - a keyword list of values to provide to `c:handle_setup/2`.
 
   ## Server Options
 

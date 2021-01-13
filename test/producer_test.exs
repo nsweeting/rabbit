@@ -160,7 +160,7 @@ defmodule Rabbit.ProducerTest do
     assert_receive :init_callback
   end
 
-  test "producer modules use handle_setup callback" do
+  test "producer modules use handle_setup/1 callback" do
     Process.register(self(), :producer_test)
 
     defmodule TestProducerFour do
@@ -181,6 +181,37 @@ defmodule Rabbit.ProducerTest do
     assert {:ok, connection} = Connection.start_link(TestConnection)
     assert {:ok, _producer} = Producer.start_link(TestProducerFour, connection: connection)
     assert_receive :handle_setup_callback
+  end
+
+  test "producer modules use handle_setup/2 callback" do
+    Process.register(self(), :producer_test)
+
+    defmodule TestProducerFive do
+      use Rabbit.Producer
+
+      @impl Rabbit.Producer
+      def init(_type, opts) do
+        {:ok, opts}
+      end
+
+      @impl Rabbit.Producer
+      def handle_setup(channel, state) do
+        send(:producer_test, {:handle_setup_callback, channel, state})
+        :ok
+      end
+    end
+
+    assert {:ok, connection} = Connection.start_link(TestConnection)
+
+    assert {:ok, _producer} =
+             Producer.start_link(TestProducerFive,
+               connection: connection,
+               setup_opts: [exchange: "test"]
+             )
+
+    assert_receive {:handle_setup_callback, channel, state}
+    assert %AMQP.Channel{} = channel
+    assert %{connection: _, publish_opts: _, setup_opts: [exchange: "test"]} = state
   end
 
   def await_publishing(producer) do
