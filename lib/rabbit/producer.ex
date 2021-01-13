@@ -206,7 +206,7 @@ defmodule Rabbit.Producer do
 
   The function must accept a producer child pid.
   """
-  @spec transaction(Rabbit.Producer.t(), (Rabbit.Prodcuer.t() -> any())) :: any()
+  @spec transaction(Rabbit.Producer.t(), (Rabbit.Producer.t() -> any())) :: any()
   def transaction(producer, fun) do
     :poolboy.transaction(producer, &fun.(&1))
   end
