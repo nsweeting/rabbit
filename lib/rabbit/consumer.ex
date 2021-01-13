@@ -6,7 +6,7 @@ defmodule Rabbit.Consumer do
   `AMQP.Channel` and provide the following benefits:
 
   * Durability during connection and channel failures through use of expotential backoff.
-  * Easy runtime setup through the `c:init/2` and `c:handle_setup/2` callbacks.
+  * Easy runtime setup through the `c:init/2` and `c:handle_setup/2` or `c:handle_setup/1` callbacks.
   * Automatic acknowledgements based on the return value of the `c:handle_message/1` callback.
   * Ability to handle exceptions through the `c:handle_error/1` callback.
   * Each message is executed within its own supervised task.
@@ -99,6 +99,7 @@ defmodule Rabbit.Consumer do
           | {:no_wait, boolean()}
           | {:arguments, Keyword.t()}
           | {:custom_meta, map()}
+          | {:setup_opts, setup_options()}
   @type options :: [option()]
   @type delivery_tag :: non_neg_integer()
   @type action_options :: [{:multiple, boolean()} | {:requeue, boolean()}]
@@ -110,6 +111,7 @@ defmodule Rabbit.Consumer do
           | {:reject, Rabbit.Message.t()}
           | {:reject, Rabbit.Message.t(), action_options()}
           | any()
+  @type setup_options :: keyword()
 
   @doc """
   A callback executed when the consumer is started.
@@ -144,6 +146,20 @@ defmodule Rabbit.Consumer do
   @callback handle_setup(channel :: AMQP.Channel.t(), queue :: String.t()) :: :ok | :error
 
   @doc """
+  The same as `c:handle_setup/1` but called with the current state of the consumer.
+
+  Important keys from the state include:
+
+  * `:connection` - the `Rabbit.Connection` module in use.
+  * `:channel` - the `AMQP.Channel` open for this consumer.
+  * `:queue` - the queue name.
+  * `:setup_opts` - as provided to `start_link/3`.
+
+  Return either `:ok` or `{:ok, new_state}` for success, the latter will update the state.
+  """
+  @callback handle_setup(state :: map) :: :ok | {:ok, new_state :: map()} | :error
+
+  @doc """
   A callback executed to handle message consumption.
 
   The callback is provided a `Rabbit.Message` struct. You may find more information
@@ -176,7 +192,7 @@ defmodule Rabbit.Consumer do
   """
   @callback handle_error(message :: Rabbit.Message.t()) :: message_response()
 
-  @optional_callbacks handle_setup: 2
+  @optional_callbacks handle_setup: 1, handle_setup: 2
 
   ################################
   # Public API
@@ -205,6 +221,7 @@ defmodule Rabbit.Consumer do
     * `:arguments` - A set of arguments for the consumer.
     * `:custom_meta` - A map of custom data that will be included in each `Rabbit.Message`
       handled by the consumer.
+    * `:setup_opts` - A keyword list of custom options for use in `c:handle_setup/1`.
 
   ## Server Options
 

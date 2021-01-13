@@ -19,7 +19,8 @@ defmodule Rabbit.Consumer.Server do
     no_wait: [type: :boolean, default: false],
     arguments: [type: :list, default: []],
     timeout: [type: [:integer, :atom], required: false],
-    custom_meta: [type: :map, default: %{}]
+    custom_meta: [type: :map, default: %{}],
+    setup_opts: [type: :list, default: [], required: false]
   }
 
   @qos_opts [
@@ -168,7 +169,8 @@ defmodule Rabbit.Consumer.Server do
       qos_opts: Keyword.take(opts, @qos_opts),
       consume_opts: Keyword.take(opts, @consume_opts),
       worker_opts: Keyword.take(opts, @worker_opts),
-      custom_meta: Keyword.get(opts, :custom_meta)
+      custom_meta: Keyword.get(opts, :custom_meta),
+      setup_opts: Keyword.get(opts, :setup_opts)
     }
   end
 
@@ -206,18 +208,33 @@ defmodule Rabbit.Consumer.Server do
   defp handle_setup(%{setup_run: true} = state), do: {:ok, state}
 
   defp handle_setup(state) do
-    if function_exported?(state.module, :handle_setup, 2) do
-      case state.module.handle_setup(state.channel, state.queue) do
-        :ok ->
-          state = %{state | setup_run: true}
-          {:ok, state}
+    result =
+      cond do
+        function_exported?(state.module, :handle_setup, 2) ->
+          state.module.handle_setup(state.channel, state.queue)
 
-        error ->
-          log_error(state, error)
-          {:error, state}
+        function_exported?(state.module, :handle_setup, 1) ->
+          state.module.handle_setup(state)
+
+        true ->
+          :skip
       end
-    else
-      {:ok, state}
+
+    case result do
+      :ok ->
+        state = %{state | setup_run: true}
+        {:ok, state}
+
+      :skip ->
+        {:ok, state}
+
+      {:ok, state} ->
+        state = %{state | setup_run: true}
+        {:ok, state}
+
+      error ->
+        log_error(state, error)
+        {:error, state}
     end
   end
 
