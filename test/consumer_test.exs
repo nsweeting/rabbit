@@ -203,6 +203,14 @@ defmodule Rabbit.ConsumerTest do
     assert {:ok, _, _} = start_consumer(MinimalTestConsumer, meta, queue: queue)
   end
 
+  test "stops the server if the queue is not specified", meta do
+    Process.flag(:trap_exit, true)
+    {:ok, consumer} = Consumer.start_link(MinimalTestConsumer, connection: meta.connection)
+    Process.monitor(consumer)
+
+    assert_receive {:EXIT, _pid, :no_queue_given}
+  end
+
   test "will ack messages based on return value", meta do
     state = connection_state(meta.connection)
     {:ok, channel} = AMQP.Channel.open(state.connection)

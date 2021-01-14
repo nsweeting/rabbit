@@ -9,7 +9,7 @@ defmodule Rabbit.Consumer.Server do
 
   @opts_schema %{
     connection: [type: [:tuple, :pid, :atom], required: true],
-    queue: [type: :binary, required: true],
+    queue: [type: :binary, required: false],
     prefetch_count: [type: :integer, default: 1],
     prefetch_size: [type: :integer, default: 0],
     consumer_tag: [type: :binary, default: ""],
@@ -91,6 +91,7 @@ defmodule Rabbit.Consumer.Server do
   def handle_continue(:consume, state) do
     case consume(state) do
       {:ok, state} -> {:noreply, state}
+      {:error, :no_queue_given} -> {:stop, :no_queue_given, state}
       {:error, state} -> {:noreply, state, {:continue, :restart_delay}}
     end
   end
@@ -239,6 +240,7 @@ defmodule Rabbit.Consumer.Server do
   end
 
   defp consume(%{consuming: true} = state), do: {:ok, state}
+  defp consume(%{queue: nil}), do: {:error, :no_queue_given}
 
   defp consume(state) do
     with :ok <- AMQP.Basic.qos(state.channel, state.qos_opts),
