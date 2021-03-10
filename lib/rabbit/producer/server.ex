@@ -193,33 +193,22 @@ defmodule Rabbit.Producer.Server do
   defp handle_setup(%{setup_run: true} = state), do: {:ok, state}
 
   defp handle_setup(state) do
-    result =
-      cond do
-        function_exported?(state.module, :handle_setup, 2) ->
-          state.module.handle_setup(state.channel, state)
+    if function_exported?(state.module, :handle_setup, 1) do
+      case state.module.handle_setup(state) do
+        :ok ->
+          state = %{state | setup_run: true}
+          {:ok, state}
 
-        function_exported?(state.module, :handle_setup, 1) ->
-          state.module.handle_setup(state.channel)
+        {:ok, state} ->
+          state = %{state | setup_run: true}
+          {:ok, state}
 
-        true ->
-          :skip
+        error ->
+          log_error(state, error)
+          {:error, state}
       end
-
-    case result do
-      :ok ->
-        state = %{state | setup_run: true}
-        {:ok, state}
-
-      :skip ->
-        {:ok, state}
-
-      {:ok, state} ->
-        state = %{state | setup_run: true}
-        {:ok, state}
-
-      error ->
-        log_error(state, error)
-        {:error, state}
+    else
+      {:ok, state}
     end
   end
 

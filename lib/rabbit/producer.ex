@@ -7,7 +7,7 @@ defmodule Rabbit.Producer do
 
   * Durability during connection and channel failures through use of expotential backoff.
   * Channel pooling for increased publishing performance.
-  * Easy runtime setup through an `c:init/2` and `c:handle_setup/1` or `c:handle_setup/2` callbacks.
+  * Easy runtime setup through an `c:init/2` and `c:handle_setup/1` callbacks.
   * Simplification of standard publishing options.
   * Automatic payload encoding based on available serializers and message
     content type.
@@ -133,35 +133,30 @@ defmodule Rabbit.Producer do
   @doc """
   An optional callback executed after the channel is open for each producer.
 
-  The callback is called with an `AMQP.Channel`. At the most basic, you may want
-  to declare queues that you will be publishing to.
+  The callback is called with the current state. At the most basic, you may want to declare queues
+  that you will be publishing to.
 
-      def handle_setup(channel) do
-        AMQP.Queue.declare(channel, "some_queue")
+      def handle_setup(state) do
+        AMQP.Queue.declare(state.channel, "some_queue")
 
         :ok
       end
-
-  The callback must return an `:ok` atom - otherise it will be marked as failed,
-  and the producer will attempt to go through the channel setup process again.
-
-  Alternatively, you could use a `Rabbit.Topology` process to perform this
-  setup work. Please see its docs for more information.
-  """
-  @callback handle_setup(channel :: AMQP.Channel.t()) :: :ok | :error
-
-  @doc """
-  The same as `handle_setup/1` but includes the current state as a second argument.
 
   Important keys in the state include:
 
   * `:connection` - the `Rabbit.Connection` process.
   * `:channel` - the opened `AMQP.Channel` channel.
   * `:setup_opts` - options provided undert the key `:setup_opts` to `start_link/3`.
-  """
-  @callback handle_setup(channel :: AMQP.Channel.t(), state :: map()) :: :ok | :error
 
-  @optional_callbacks handle_setup: 1, handle_setup: 2
+  The callback must return an `:ok` atom or `{:ok, state}` tuple - otherise it will be marked as
+  failed, and the producer will attempt to go through the channel setup process again.
+
+  Alternatively, you could use a `Rabbit.Topology` process to perform this
+  setup work. Please see its docs for more information.
+  """
+  @callback handle_setup(state :: map()) :: :ok | {:ok, map()} | :error
+
+  @optional_callbacks handle_setup: 1
 
   ################################
   # Public API
@@ -187,7 +182,7 @@ defmodule Rabbit.Producer do
       before proceeding with async start - defaults to `100`.
     * `:publish_opts` - Any `t:publish_option/0` that is automatically set as a
       default option value when calling `publish/6`.
-    * `:setup_opts` - a keyword list of values to provide to `c:handle_setup/2`.
+    * `:setup_opts` - a keyword list of values to provide to `c:handle_setup/1`.
 
   ## Server Options
 
