@@ -31,10 +31,10 @@ defmodule Rabbit.ConsumerTest do
     end
 
     @impl Rabbit.Consumer
-    def handle_setup(chan, queue) do
+    def handle_setup(state) do
       if is_pid(Process.whereis(:consumer_test)), do: send(:consumer_test, :handle_setup_callback)
-      AMQP.Queue.declare(chan, queue, auto_delete: true)
-      AMQP.Queue.purge(chan, queue)
+      AMQP.Queue.declare(state.channel, state.queue, auto_delete: true)
+      AMQP.Queue.purge(state.channel, state.queue)
       :ok
     end
 

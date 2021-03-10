@@ -6,7 +6,7 @@ defmodule Rabbit.Consumer do
   `AMQP.Channel` and provide the following benefits:
 
   * Durability during connection and channel failures through use of expotential backoff.
-  * Easy runtime setup through the `c:init/2` and `c:handle_setup/2` or `c:handle_setup/1` callbacks.
+  * Easy runtime setup through the `c:init/2` and `c:handle_setup/1` callbacks.
   * Automatic acknowledgements based on the return value of the `c:handle_message/1` callback.
   * Ability to handle exceptions through the `c:handle_error/1` callback.
   * Each message is executed within its own supervised task.
@@ -49,9 +49,9 @@ defmodule Rabbit.Consumer do
         end
 
         @impl Rabbit.Consumer
-        def handle_setup(channel, queue) do
+        def handle_setup(state) do
           # Optional callback to perform exchange or queue setup
-          AMQP.Queue.declare(channel, queue)
+          AMQP.Queue.declare(state.channel, state.queue)
 
           :ok
         end
@@ -127,26 +127,15 @@ defmodule Rabbit.Consumer do
   @doc """
   An optional callback executed after the channel is open, but before consumption.
 
-  The callback is called with an `AMQP.Channel`, as well as the queue that will
-  be consumed. At the most basic, you may want to declare the queue to ensure
-  its available. This will be entirely application dependent though.
+  The callback is called with the current state, containing the open channel and queue name if
+  given. At the most basic, you may want to declare the queue to ensure it's available. This will
+  be entirely application dependent though.
 
-      def handle_setup(channel, queue) do
-        AMQP.Queue.declare(channel, queue)
+      def handle_setup(state) do
+        AMQP.Queue.declare(state.channel, state.queue)
 
         :ok
       end
-
-  The callback must return an `:ok` atom - otherise it will be marked as failed,
-  and the consumer will attempt to go through the connection setup process again.
-
-  Alternatively, you could use a `Rabbit.Topology` process to perform this
-  setup work. Please see its docs for more information.
-  """
-  @callback handle_setup(channel :: AMQP.Channel.t(), queue :: String.t()) :: :ok | :error
-
-  @doc """
-  The same as `c:handle_setup/1` but called with the current state of the consumer.
 
   Important keys from the state include:
 
@@ -156,6 +145,12 @@ defmodule Rabbit.Consumer do
   * `:setup_opts` - as provided to `start_link/3`.
 
   Return either `:ok` or `{:ok, new_state}` for success, the latter will update the state.
+
+  If another value is returned it will be marked as failed, and the consumer will attempt to go
+  through the connection setup process again.
+
+  Alternatively, you could use a `Rabbit.Topology` process to perform this
+  setup work. Please see its docs for more information.
   """
   @callback handle_setup(state :: map) :: :ok | {:ok, new_state :: map()} | :error
 
@@ -192,7 +187,7 @@ defmodule Rabbit.Consumer do
   """
   @callback handle_error(message :: Rabbit.Message.t()) :: message_response()
 
-  @optional_callbacks handle_setup: 1, handle_setup: 2
+  @optional_callbacks handle_setup: 1
 
   ################################
   # Public API
