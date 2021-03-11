@@ -119,9 +119,9 @@ defmodule Rabbit.ConsumerSupervisor do
   A callback executed by each consumer after the channel is open, but before
   consumption.
 
-  Please see `c:Rabbit.Consumer.handle_setup/2` for more information.
+  Please see `c:Rabbit.Consumer.handle_setup/1` for more information.
   """
-  @callback handle_setup(channel :: AMQP.Channel.t(), queue :: String.t()) :: :ok
+  @callback handle_setup(state :: map()) :: :ok | {:ok, new_state :: map()} | :error
 
   @doc """
   A callback executed by each consumer to handle message consumption.
@@ -137,7 +137,7 @@ defmodule Rabbit.ConsumerSupervisor do
   """
   @callback handle_error(message :: Rabbit.Message.t()) :: Rabbit.Consumer.message_response()
 
-  @optional_callbacks handle_setup: 2
+  @optional_callbacks handle_setup: 1
 
   ################################
   # Public API

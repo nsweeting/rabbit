@@ -6,7 +6,7 @@ defmodule Rabbit.Topology do
   bindings. Basically - performing any RabbitMQ setup required by your application.
   It should be added to your supervision tree before any producers or consumers.
 
-  Both `Rabbit.Consumer` and `Rabbit.ConsumerSupervisor` have the `handle_setup/2`
+  Both `Rabbit.Consumer` and `Rabbit.ConsumerSupervisor` have the `handle_setup/1`
   callback, which can be used to perform any queue, exchange or binding work as
   well. But if you have more complex requirements, this module can be used.
 
