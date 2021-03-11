@@ -12,7 +12,8 @@ defmodule Rabbit.Producer.Server do
     sync_start: [type: :boolean, required: true, default: true],
     sync_start_delay: [type: :integer, required: true, default: 50],
     sync_start_max: [type: :integer, required: true, default: 100],
-    publish_opts: [type: :list, default: []]
+    publish_opts: [type: :list, default: []],
+    setup_opts: [type: :list, required: false]
   }
 
   ################################
@@ -131,7 +132,8 @@ defmodule Rabbit.Producer.Server do
       channel_open: false,
       setup_run: false,
       restart_attempts: 0,
-      publish_opts: Keyword.get(opts, :publish_opts)
+      publish_opts: Keyword.get(opts, :publish_opts),
+      setup_opts: Keyword.get(opts, :setup_opts)
     }
   end
 
@@ -192,8 +194,12 @@ defmodule Rabbit.Producer.Server do
 
   defp handle_setup(state) do
     if function_exported?(state.module, :handle_setup, 1) do
-      case state.module.handle_setup(state.channel) do
+      case state.module.handle_setup(state) do
         :ok ->
+          state = %{state | setup_run: true}
+          {:ok, state}
+
+        {:ok, state} ->
           state = %{state | setup_run: true}
           {:ok, state}
 

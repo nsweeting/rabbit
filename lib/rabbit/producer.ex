@@ -82,6 +82,7 @@ defmodule Rabbit.Producer do
           | {:sync_start_delay, non_neg_integer()}
           | {:sync_start_max, non_neg_integer()}
           | {:publish_opts, publish_options()}
+          | {:setup_opts, setup_options()}
   @type options :: [option()]
   @type exchange :: String.t()
   @type routing_key :: String.t()
@@ -103,6 +104,7 @@ defmodule Rabbit.Producer do
           | {:user_id, String.t()}
           | {:app_id, String.t()}
   @type publish_options :: [publish_option()]
+  @type setup_options :: keyword()
 
   @doc """
   A callback executed by each component of the producer pool.
@@ -131,22 +133,28 @@ defmodule Rabbit.Producer do
   @doc """
   An optional callback executed after the channel is open for each producer.
 
-  The callback is called with an `AMQP.Channel`. At the most basic, you may want
-  to declare queues that you will be publishing to.
+  The callback is called with the current state. At the most basic, you may want to declare queues
+  that you will be publishing to.
 
-      def handle_setup(channel) do
-        AMQP.Queue.declare(channel, "some_queue")
+      def handle_setup(state) do
+        AMQP.Queue.declare(state.channel, "some_queue")
 
         :ok
       end
 
-  The callback must return an `:ok` atom - otherise it will be marked as failed,
-  and the producer will attempt to go through the channel setup process again.
+  Important keys in the state include:
+
+  * `:connection` - the `Rabbit.Connection` process.
+  * `:channel` - the opened `AMQP.Channel` channel.
+  * `:setup_opts` - options provided undert the key `:setup_opts` to `start_link/3`.
+
+  The callback must return an `:ok` atom or `{:ok, state}` tuple - otherise it will be marked as
+  failed, and the producer will attempt to go through the channel setup process again.
 
   Alternatively, you could use a `Rabbit.Topology` process to perform this
   setup work. Please see its docs for more information.
   """
-  @callback handle_setup(channel :: AMQP.Channel.t()) :: :ok | :error
+  @callback handle_setup(state :: map()) :: :ok | {:ok, map()} | :error
 
   @optional_callbacks handle_setup: 1
 
@@ -174,6 +182,7 @@ defmodule Rabbit.Producer do
       before proceeding with async start - defaults to `100`.
     * `:publish_opts` - Any `t:publish_option/0` that is automatically set as a
       default option value when calling `publish/6`.
+    * `:setup_opts` - a keyword list of values to provide to `c:handle_setup/1`.
 
   ## Server Options
 
@@ -192,7 +201,7 @@ defmodule Rabbit.Producer do
 
   The function must accept a producer child pid.
   """
-  @spec transaction(Rabbit.Producer.t(), (Rabbit.Prodcuer.t() -> any())) :: any()
+  @spec transaction(Rabbit.Producer.t(), (Rabbit.Producer.t() -> any())) :: any()
   def transaction(producer, fun) do
     :poolboy.transaction(producer, &fun.(&1))
   end

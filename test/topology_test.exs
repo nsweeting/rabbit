@@ -70,11 +70,6 @@ defmodule Rabbit.TopologyTest do
     end
 
     @impl Rabbit.Consumer
-    def handle_setup(_chan, _queue) do
-      :ok
-    end
-
-    @impl Rabbit.Consumer
     def handle_message(msg) do
       decoded_payload = Base.decode64!(msg.payload)
       {pid, ref} = :erlang.binary_to_term(decoded_payload)

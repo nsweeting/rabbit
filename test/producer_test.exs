@@ -160,7 +160,7 @@ defmodule Rabbit.ProducerTest do
     assert_receive :init_callback
   end
 
-  test "producer modules use handle_setup callback" do
+  test "producer modules use handle_setup/1 callback" do
     Process.register(self(), :producer_test)
 
     defmodule TestProducerFour do
@@ -172,15 +172,16 @@ defmodule Rabbit.ProducerTest do
       end
 
       @impl Rabbit.Producer
-      def handle_setup(_channel) do
-        send(:producer_test, :handle_setup_callback)
+      def handle_setup(state) do
+        send(:producer_test, {:handle_setup_callback, state})
         :ok
       end
     end
 
     assert {:ok, connection} = Connection.start_link(TestConnection)
     assert {:ok, _producer} = Producer.start_link(TestProducerFour, connection: connection)
-    assert_receive :handle_setup_callback
+    assert_receive {:handle_setup_callback, %{channel: channel}}
+    assert channel
   end
 
   def await_publishing(producer) do

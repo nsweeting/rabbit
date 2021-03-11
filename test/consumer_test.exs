@@ -31,10 +31,10 @@ defmodule Rabbit.ConsumerTest do
     end
 
     @impl Rabbit.Consumer
-    def handle_setup(chan, queue) do
+    def handle_setup(state) do
       if is_pid(Process.whereis(:consumer_test)), do: send(:consumer_test, :handle_setup_callback)
-      AMQP.Queue.declare(chan, queue, auto_delete: true)
-      AMQP.Queue.purge(chan, queue)
+      AMQP.Queue.declare(state.channel, state.queue, auto_delete: true)
+      AMQP.Queue.purge(state.channel, state.queue)
       :ok
     end
 
@@ -44,6 +44,55 @@ defmodule Rabbit.ConsumerTest do
       {pid, ref, return} = :erlang.binary_to_term(decoded_payload)
       send(pid, {:handle_message, ref, msg})
       {return, msg}
+    end
+
+    @impl Rabbit.Consumer
+    def handle_error(_) do
+      :ok
+    end
+  end
+
+  defmodule MinimalTestConsumer do
+    use Rabbit.Consumer
+
+    @impl Rabbit.Consumer
+    def init(:consumer, opts) do
+      {:ok, opts}
+    end
+
+    @impl Rabbit.Consumer
+    def handle_message(_msg) do
+    end
+
+    @impl Rabbit.Consumer
+    def handle_error(_) do
+      :ok
+    end
+  end
+
+  defmodule AdvancedSetupTestConsumer do
+    use Rabbit.Consumer
+
+    @impl Rabbit.Consumer
+    def init(:consumer, opts) do
+      {:ok, opts}
+    end
+
+    @impl Rabbit.Consumer
+    def handle_setup(state) do
+      %{channel: channel, setup_opts: setup_opts} = state
+      {:ok, %{queue: queue}} = AMQP.Queue.declare(channel)
+      # Declare an exchange as the default exchange cannot bind queues.
+      :ok = AMQP.Exchange.declare(channel, "topic_test", :topic)
+      :ok = AMQP.Queue.bind(channel, queue, "topic_test", routing_key: setup_opts[:routing_key])
+
+      send(setup_opts[:test_pid], :handle_advanced_setup_callback)
+
+      {:ok, %{state | queue: queue}}
+    end
+
+    @impl Rabbit.Consumer
+    def handle_message(_msg) do
     end
 
     @impl Rabbit.Consumer
@@ -129,11 +178,37 @@ defmodule Rabbit.ConsumerTest do
     assert_receive :init_callback
   end
 
-  test "consumer modules use handle_setup callback", meta do
+  test "consumer modules use handle_setup/2 callback", meta do
     Process.register(self(), :consumer_test)
 
     assert {:ok, _, _} = start_consumer(meta)
     assert_receive :handle_setup_callback
+  end
+
+  test "consumer module uses handle_setup/1 callback", meta do
+    assert {:ok, _, _} =
+             start_consumer(AdvancedSetupTestConsumer, meta,
+               setup_opts: [test_pid: self(), routing_key: "routing.route"]
+             )
+
+    assert_receive :handle_advanced_setup_callback
+  end
+
+  test "handle_setup is optional if the queue already exists", meta do
+    state = connection_state(meta.connection)
+    {:ok, channel} = AMQP.Channel.open(state.connection)
+    queue = queue_name()
+    AMQP.Queue.declare(channel, queue, auto_delete: true)
+
+    assert {:ok, _, _} = start_consumer(MinimalTestConsumer, meta, queue: queue)
+  end
+
+  test "stops the server if the queue is not specified", meta do
+    Process.flag(:trap_exit, true)
+    {:ok, consumer} = Consumer.start_link(MinimalTestConsumer, connection: meta.connection)
+    Process.monitor(consumer)
+
+    assert_receive {:EXIT, _pid, :no_queue_given}
   end
 
   test "will ack messages based on return value", meta do
@@ -162,10 +237,12 @@ defmodule Rabbit.ConsumerTest do
     assert msg.custom_meta == %{foo: "bar"}
   end
 
-  defp start_consumer(meta, opts \\ []) do
+  defp start_consumer(meta, opts \\ []), do: start_consumer(TestConsumer, meta, opts)
+
+  defp start_consumer(module, meta, opts) do
     queue = Keyword.get(opts, :queue, queue_name())
     opts = [connection: meta.connection, queue: queue] ++ opts
-    {:ok, consumer} = Consumer.start_link(TestConsumer, opts)
+    {:ok, consumer} = Consumer.start_link(module, opts)
     await_consuming(consumer)
     {:ok, consumer, queue}
   end

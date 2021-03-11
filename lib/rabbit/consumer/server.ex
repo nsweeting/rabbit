@@ -9,7 +9,7 @@ defmodule Rabbit.Consumer.Server do
 
   @opts_schema %{
     connection: [type: [:tuple, :pid, :atom], required: true],
-    queue: [type: :binary, required: true],
+    queue: [type: :binary, required: false],
     prefetch_count: [type: :integer, default: 1],
     prefetch_size: [type: :integer, default: 0],
     consumer_tag: [type: :binary, default: ""],
@@ -19,7 +19,8 @@ defmodule Rabbit.Consumer.Server do
     no_wait: [type: :boolean, default: false],
     arguments: [type: :list, default: []],
     timeout: [type: [:integer, :atom], required: false],
-    custom_meta: [type: :map, default: %{}]
+    custom_meta: [type: :map, default: %{}],
+    setup_opts: [type: :list, default: [], required: false]
   }
 
   @qos_opts [
@@ -90,6 +91,7 @@ defmodule Rabbit.Consumer.Server do
   def handle_continue(:consume, state) do
     case consume(state) do
       {:ok, state} -> {:noreply, state}
+      {:error, :no_queue_given} -> {:stop, :no_queue_given, state}
       {:error, state} -> {:noreply, state, {:continue, :restart_delay}}
     end
   end
@@ -168,7 +170,8 @@ defmodule Rabbit.Consumer.Server do
       qos_opts: Keyword.take(opts, @qos_opts),
       consume_opts: Keyword.take(opts, @consume_opts),
       worker_opts: Keyword.take(opts, @worker_opts),
-      custom_meta: Keyword.get(opts, :custom_meta)
+      custom_meta: Keyword.get(opts, :custom_meta),
+      setup_opts: Keyword.get(opts, :setup_opts)
     }
   end
 
@@ -206,9 +209,13 @@ defmodule Rabbit.Consumer.Server do
   defp handle_setup(%{setup_run: true} = state), do: {:ok, state}
 
   defp handle_setup(state) do
-    if function_exported?(state.module, :handle_setup, 2) do
-      case state.module.handle_setup(state.channel, state.queue) do
+    if function_exported?(state.module, :handle_setup, 1) do
+      case state.module.handle_setup(state) do
         :ok ->
+          state = %{state | setup_run: true}
+          {:ok, state}
+
+        {:ok, state} ->
           state = %{state | setup_run: true}
           {:ok, state}
 
@@ -222,6 +229,7 @@ defmodule Rabbit.Consumer.Server do
   end
 
   defp consume(%{consuming: true} = state), do: {:ok, state}
+  defp consume(%{queue: nil}), do: {:error, :no_queue_given}
 
   defp consume(state) do
     with :ok <- AMQP.Basic.qos(state.channel, state.qos_opts),
