@@ -83,9 +83,9 @@ defmodule MyConsumer do
   end
 
   @impl Rabbit.Consumer
-  def handle_setup(channel, queue) do
+  def handle_setup(state) do
     # Optional callback to perform any exchange or queue setup
-    AMQP.Queue.declare(channel, queue)
+    AMQP.Queue.declare(state.channel, state.queue)
     :ok
   end
 
@@ -139,9 +139,9 @@ defmodule MyConsumerSupervisor do
   end
 
   @impl Rabbit.ConsumerSupervisor
-  def handle_setup(channel, queue) do
+  def handle_setup(state) do
     # Optional callback to perform any exchange or queue setup per consumer
-    AMQP.Queue.declare(channel, queue)
+    AMQP.Queue.declare(state.channel, state.queue)
     :ok
   end
 
