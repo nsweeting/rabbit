@@ -60,7 +60,7 @@ MyConnection.start_link()
 ## [Consumers](https://hexdocs.pm/rabbit/Rabbit.Consumer.html)
 
 Consumers are the "workers" of your application. They must be provided a connection
-module and queue to consume. Every message recieved is then passed along to your
+module and queue to consume. Every message received is then passed along to your
 `handle_message/1` callback within its own process.
 
 You can optionally implement the `handle_setup/2` callback to perform any work

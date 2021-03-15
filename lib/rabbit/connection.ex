@@ -7,7 +7,7 @@ defmodule Rabbit.Connection do
   wrap around the standard `AMQP.Connection` and provide the following
   benefits:
 
-  * Durability during connection failures through use of expotential backoff.
+  * Durability during connection failures through use of exponential backoff.
   * Increased throughput via connection pooling.
   * Subscriptions that assist connection status monitoring.
   * Easy runtime setup through an `c:init/2` callback.
@@ -117,7 +117,7 @@ defmodule Rabbit.Connection do
       or last in the line of available workers - defaults to `:fifo`.
     * `:name` - A name that will be displayed in the management UI.
     * `:username` - The name of a user registered with the broker - defaults to `"guest"`.
-    * `:password` - The password of user - defaults to `"guest\`.
+    * `:password` - The password of user - defaults to `"guest"`.
     * `:virtual_host` - The name of a virtual host in the broker - defaults to `"/"`.
     * `:host` - The hostname of the broker - defaults to `"localhost"`.
     * `:port` - The port the broker is listening on - defaults to `5672`.
