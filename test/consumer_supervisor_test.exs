@@ -31,8 +31,8 @@ defmodule Rabbit.ConsumerSupervisorTest do
 
     @impl Rabbit.ConsumerSupervisor
     def handle_setup(state) do
-      AMQP.Queue.declare(state.chan, state.queue, auto_delete: true)
-      AMQP.Queue.purge(state.chan, state.queue)
+      AMQP.Queue.declare(state.channel, state.queue, auto_delete: true)
+      AMQP.Queue.purge(state.channel, state.queue)
 
       :ok
     end
