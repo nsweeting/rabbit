@@ -101,6 +101,36 @@ defmodule Rabbit.ConsumerTest do
     end
   end
 
+  defmodule TroublesomeTestConsumer do
+    use Rabbit.Consumer
+
+    @impl Rabbit.Consumer
+    def init(:consumer, opts) do
+      {:ok, opts}
+    end
+
+    @impl Rabbit.Consumer
+    def handle_setup(state) do
+      attempt = Agent.get_and_update(state.setup_opts[:counter], fn n -> {n, n + 1} end)
+
+      if attempt == 0 do
+        {:error, :something_went_wrong}
+      else
+        AMQP.Queue.declare(state.channel, state.queue, auto_delete: true)
+        :ok
+      end
+    end
+
+    @impl Rabbit.Consumer
+    def handle_message(_msg) do
+    end
+
+    @impl Rabbit.Consumer
+    def handle_error(_) do
+      :ok
+    end
+  end
+
   setup do
     {:ok, connection} = Connection.start_link(TestConnection)
     {:ok, producer} = Producer.start_link(TestProducer, connection: connection)
@@ -118,6 +148,34 @@ defmodule Rabbit.ConsumerTest do
     end
   end
 
+  describe "start_link/3 with :sync_start" do
+    test "starts consumer", meta do
+      assert {:ok, consumer} =
+               Consumer.start_link(TestConsumer,
+                 connection: meta.connection,
+                 queue: "consumer",
+                 sync_start: true
+               )
+
+      assert %{started_mode: :sync, consuming: true} = get_state(consumer)
+    end
+
+    test "starts consumer with multiple attempts", meta do
+      {:ok, counter} = Agent.start(fn -> 0 end)
+
+      assert {:ok, consumer} =
+               Consumer.start_link(TroublesomeTestConsumer,
+                 connection: meta.connection,
+                 queue: "consumer",
+                 sync_start: true,
+                 setup_opts: [counter: counter]
+               )
+
+      assert Agent.get(counter, & &1) == 2
+      assert %{started_mode: :sync, consuming: true} = get_state(consumer)
+    end
+  end
+
   describe "stop/1" do
     test "stops consumer", meta do
       assert {:ok, consumer, _queue} = start_consumer(meta)
@@ -128,7 +186,7 @@ defmodule Rabbit.ConsumerTest do
     test "disconnects the amqp channel", meta do
       assert {:ok, consumer, _queue} = start_consumer(meta)
 
-      state = GenServer.call(consumer, :state)
+      state = get_state(consumer)
 
       assert Process.alive?(state.channel.pid)
       assert :ok = Consumer.stop(consumer)
@@ -143,10 +201,10 @@ defmodule Rabbit.ConsumerTest do
     assert {:ok, consumer, _queue} = start_consumer(meta)
 
     connection_state = connection_state(meta.connection)
-    consumer_state1 = GenServer.call(consumer, :state)
+    consumer_state1 = get_state(consumer)
     AMQP.Connection.close(connection_state.connection)
     await_consuming(consumer)
-    consumer_state2 = GenServer.call(consumer, :state)
+    consumer_state2 = get_state(consumer)
 
     assert consumer_state1.channel.pid != consumer_state2.channel.pid
   end
@@ -256,7 +314,7 @@ defmodule Rabbit.ConsumerTest do
   end
 
   defp await_consuming(consumer) do
-    state = GenServer.call(consumer, :state)
+    state = get_state(consumer)
 
     if state.consuming do
       :ok
@@ -270,7 +328,11 @@ defmodule Rabbit.ConsumerTest do
     :crypto.strong_rand_bytes(8) |> Base.encode64()
   end
 
+  defp get_state(consumer) do
+    GenServer.call(consumer, :state)
+  end
+
   defp connection_state(connection) do
-    Connection.transaction(connection, &GenServer.call(&1, :state))
+    Connection.transaction(connection, &get_state/1)
   end
 end
