@@ -5,7 +5,7 @@ defmodule Rabbit.Producer do
   Producers are needed to publish any messages to RabbitMQ. They wrap around the
   standard `AMQP.Channel` and provide the following benefits:
 
-  * Durability during connection and channel failures through use of expotential backoff.
+  * Durability during connection and channel failures through use of exponential backoff.
   * Channel pooling for increased publishing performance.
   * Easy runtime setup through an `c:init/2` and `c:handle_setup/1` callbacks.
   * Simplification of standard publishing options.
@@ -172,10 +172,10 @@ defmodule Rabbit.Producer do
       Each process consumes a RabbitMQ channel.
     * `:max_overflow` - Maximum number of temporary workers created when the pool
       is empty - defaults to `0`.
-    * `:stratgey` - Determines whether checked in workers should be placed first
+    * `:strategy` - Determines whether checked in workers should be placed first
       or last in the line of available workers - defaults to `:lifo`.
     * `:sync_start` - Boolean representing whether to establish the connection
-      and channel syncronously - defaults to `true`.
+      and channel synchronously - defaults to `true`.
     * `:sync_start_delay` - The amount of time in milliseconds to sleep between
       sync start attempts - defaults to `50`.
     * `:sync_start_max` - The max amount of sync start attempts that will occur
@@ -230,7 +230,7 @@ defmodule Rabbit.Producer do
   If a `content_type` is provided as an option - and it matches one of the available
   serializers, the payload will be automatically encoded using that serializer.
 
-  For example, we could automatically encode our payload to json if we do the
+  For example, we could automatically encode our payload to JSON if we do the
   following:
 
         Rabbit.Producer.publish(MyProducer, "", "my_queue", %{foo: "bar"}, content_type: "application/json")
@@ -241,14 +241,14 @@ defmodule Rabbit.Producer do
 
     * `:mandatory` - If set, returns an error if the broker can't route the message
       to a queue - defaults to `false`.
-    * `:immediate` - If set, returns an error if the broker can't deliver te message
+    * `:immediate` - If set, returns an error if the broker can't deliver the message
       to a consumer immediately - defaults to `false`.
     * `:content_type` - MIME Content type.
     * `:content_encoding` - MIME Content encoding.
     * `:headers` - Message headers. Can be used with headers Exchanges.
     * `:persistent` - If set, uses persistent delivery mode. Messages marked as
       persistent that are delivered to durable queues will be logged to disk.
-    * `:correlation_id` - Application correlation identifier
+    * `:correlation_id` - Application correlation identifier.
     * `:priority` - Message priority, ranging from 0 to 9.
     * `:reply_to` - Name of the reply queue.
     * `:expiration` - How long the message is valid (in milliseconds).
