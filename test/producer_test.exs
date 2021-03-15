@@ -21,6 +21,26 @@ defmodule Rabbit.ProducerTest do
     end
   end
 
+  defmodule TroublesomeTestProducer do
+    use Rabbit.Producer
+
+    @impl Rabbit.Producer
+    def init(_type, opts) do
+      {:ok, opts}
+    end
+
+    @impl Rabbit.Producer
+    def handle_setup(state) do
+      attempt = Agent.get_and_update(state.setup_opts[:counter], fn n -> {n, n + 1} end)
+
+      if attempt == 0 do
+        {:error, :something_went_wrong}
+      else
+        :ok
+      end
+    end
+  end
+
   describe "start_link/3" do
     test "starts producer" do
       assert {:ok, connection} = Connection.start_link(TestConnection)
@@ -47,6 +67,22 @@ defmodule Rabbit.ProducerTest do
 
     test "returns error when given bad pool options" do
       assert {:error, _} = Producer.start_link(TestProducer, pool_size: "foo")
+    end
+  end
+
+  describe "start_link/3 with :sync_start" do
+    test "starts producer with multiple attempts" do
+      {:ok, counter} = Agent.start(fn -> 0 end)
+      assert {:ok, connection} = Connection.start_link(TestConnection)
+
+      assert {:ok, _producer} =
+               Producer.start_link(TroublesomeTestProducer,
+                 connection: connection,
+                 sync_start: true,
+                 setup_opts: [counter: counter]
+               )
+
+      assert Agent.get(counter, & &1) == 2
     end
   end
 
