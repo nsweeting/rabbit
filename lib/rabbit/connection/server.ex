@@ -256,9 +256,7 @@ defmodule Rabbit.Connection.Server do
   end
 
   defp publish(subscribers, message) do
-    for pid <- subscribers do
-      if Process.alive?(pid), do: send(pid, message)
-    end
+    for pid <- subscribers, do: send(pid, message)
 
     :ok
   end
