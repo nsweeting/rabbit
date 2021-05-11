@@ -78,7 +78,7 @@ defmodule Rabbit.Topology do
             | {:auto_delete, boolean()}
             | {:internal, boolean()}
             | {:passive, boolean()}
-            | {:no_wait, boolean()}
+            | {:nowait, boolean()}
             | {:arguments, list()}
           ]
   @type queue ::
@@ -88,7 +88,7 @@ defmodule Rabbit.Topology do
             | {:auto_delete, boolean()}
             | {:exclusive, boolean()}
             | {:passive, boolean()}
-            | {:no_wait, boolean()}
+            | {:nowait, boolean()}
             | {:arguments, list()}
           ]
   @type binding ::
@@ -97,7 +97,7 @@ defmodule Rabbit.Topology do
             | {:source, binary()}
             | {:destination, binary()}
             | {:routing_key, binary()}
-            | {:no_wait, boolean()}
+            | {:nowait, boolean()}
             | {:arguments, list()}
           ]
   @type option ::
