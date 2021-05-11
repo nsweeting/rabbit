@@ -3,9 +3,9 @@ language: elixir
 matrix:
   include:
     - elixir:  1.8
-      otp_release: 21.3
+      otp_release: 22.1
     - elixir:  1.7
-      otp_release: 21.3
+      otp_release: 22.1
 services:
   - rabbitmq
 script:
