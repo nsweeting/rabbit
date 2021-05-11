@@ -14,29 +14,29 @@ defmodule Rabbit.Topology.Server do
     passive: [type: :boolean, required: true, default: false],
     auto_delete: [type: :boolean, required: true, default: false],
     internal: [type: :boolean, required: true, default: false],
-    no_wait: [type: :boolean, required: true, default: false],
+    nowait: [type: :boolean, required: true, default: false],
     arguments: [type: :list, required: true, default: []]
   }
-  @exchange_opts [:durable, :passive, :auto_delete, :internal, :no_wait, :arguments]
+  @exchange_opts [:durable, :passive, :auto_delete, :internal, :nowait, :arguments]
   @queue_schema %{
     name: [type: :binary, required: true],
     durable: [type: :boolean, required: true, default: false],
     auto_delete: [type: :boolean, required: true, default: false],
     exclusive: [type: :boolean, required: true, default: false],
     passive: [type: :boolean, required: true, default: false],
-    no_wait: [type: :boolean, required: true, default: false],
+    nowait: [type: :boolean, required: true, default: false],
     arguments: [type: :list, required: true, default: []]
   }
-  @queue_opts [:durable, :passive, :auto_delete, :exclusive, :no_wait, :arguments]
+  @queue_opts [:durable, :passive, :auto_delete, :exclusive, :nowait, :arguments]
   @binding_schema %{
     type: [type: :atom, inclusion: [:queue, :exchange], required: true],
     source: [type: :binary, required: true],
     destination: [type: :binary, required: true],
     routing_key: [type: :binary, required: true, default: ""],
-    no_wait: [type: :boolean, required: true, default: false],
+    nowait: [type: :boolean, required: true, default: false],
     arguments: [type: :list, required: true, default: []]
   }
-  @binding_opts [:routing_key, :no_wait, :arguments]
+  @binding_opts [:routing_key, :nowait, :arguments]
   @opts_schema %{
     connection: [type: [:tuple, :pid, :atom], required: true],
     retry_delay: [type: :integer, required: true, default: 100],

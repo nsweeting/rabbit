@@ -16,7 +16,7 @@ defmodule Rabbit.Consumer.Server do
     no_local: [type: :boolean, default: false],
     no_ack: [type: :boolean, default: false],
     exclusive: [type: :boolean, default: false],
-    no_wait: [type: :boolean, default: false],
+    nowait: [type: :boolean, default: false],
     arguments: [type: :list, default: []],
     timeout: [type: [:integer, :atom], required: false],
     custom_meta: [type: :map, default: %{}],
@@ -33,7 +33,7 @@ defmodule Rabbit.Consumer.Server do
     :no_local,
     :no_ack,
     :exclusive,
-    :no_wait,
+    :nowait,
     :arguments
   ]
   @worker_opts [

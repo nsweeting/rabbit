@@ -96,7 +96,7 @@ defmodule Rabbit.Consumer do
           | {:no_local, boolean()}
           | {:no_ack, boolean()}
           | {:exclusive, boolean()}
-          | {:no_wait, boolean()}
+          | {:nowait, boolean()}
           | {:arguments, Keyword.t()}
           | {:custom_meta, map()}
           | {:setup_opts, setup_options()}
@@ -211,7 +211,7 @@ defmodule Rabbit.Consumer do
       messages - defaults to `false`.
     * `:exclusive` - A boolean representing whether only this consumer can access
       the queue - defaults to `false`.
-    * `:no_wait` - A boolean representing whether the server should not respond to
+    * `:nowait` - A boolean representing whether the server should not respond to
       methods - defaults to `false`.
     * `:arguments` - A set of arguments for the consumer.
     * `:custom_meta` - A map of custom data that will be included in each `Rabbit.Message`
