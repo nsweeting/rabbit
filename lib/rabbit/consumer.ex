@@ -100,6 +100,9 @@ defmodule Rabbit.Consumer do
           | {:arguments, Keyword.t()}
           | {:custom_meta, map()}
           | {:setup_opts, setup_options()}
+          | {:sync_start, boolean()}
+          | {:sync_start_delay, non_neg_integer()}
+          | {:sync_start_max, non_neg_integer()}
   @type options :: [option()]
   @type delivery_tag :: non_neg_integer()
   @type action_options :: [{:multiple, boolean()} | {:requeue, boolean()}]
@@ -217,6 +220,12 @@ defmodule Rabbit.Consumer do
     * `:custom_meta` - A map of custom data that will be included in each `Rabbit.Message`
       handled by the consumer.
     * `:setup_opts` - A keyword list of custom options for use in `c:handle_setup/1`.
+    * `:sync_start` - Boolean representing whether to establish the connection,
+      channel, and setup synchronously - defaults to `false`.
+    * `:sync_start_delay` - The amount of time in milliseconds to sleep between
+      sync start attempts - defaults to `50`.
+    * `:sync_start_max` - The max amount of sync start attempts that will occur
+      before proceeding with async start - defaults to `100`.
 
   ## Server Options
 

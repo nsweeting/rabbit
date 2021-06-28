@@ -20,7 +20,10 @@ defmodule Rabbit.Consumer.Server do
     arguments: [type: :list, default: []],
     timeout: [type: [:integer, :atom], required: false],
     custom_meta: [type: :map, default: %{}],
-    setup_opts: [type: :list, default: [], required: false]
+    setup_opts: [type: :list, default: [], required: false],
+    sync_start: [type: :boolean, required: true, default: false],
+    sync_start_delay: [type: :integer, required: true, default: 50],
+    sync_start_max: [type: :integer, required: true, default: 100]
   }
 
   @qos_opts [
@@ -61,6 +64,7 @@ defmodule Rabbit.Consumer.Server do
     with {:ok, opts} <- module.init(:consumer, opts),
          {:ok, opts} <- validate_opts(opts, @opts_schema) do
       state = init_state(module, opts)
+      state = sync_start(state)
       {:ok, state, {:continue, :connection}}
     end
   end
@@ -171,8 +175,35 @@ defmodule Rabbit.Consumer.Server do
       consume_opts: Keyword.take(opts, @consume_opts),
       worker_opts: Keyword.take(opts, @worker_opts),
       custom_meta: Keyword.get(opts, :custom_meta),
-      setup_opts: Keyword.get(opts, :setup_opts)
+      setup_opts: Keyword.get(opts, :setup_opts),
+      sync_start: Keyword.get(opts, :sync_start),
+      sync_start_delay: Keyword.get(opts, :sync_start_delay),
+      sync_start_max: Keyword.get(opts, :sync_start_max),
+      started_mode: :async
     }
+  end
+
+  defp sync_start(state, attempt \\ 1)
+
+  defp sync_start(%{sync_start: false} = state, _attempt), do: state
+
+  defp sync_start(%{sync_start_max: max} = state, attempt) when attempt >= max do
+    log_error(state, {:error, :sync_start_failed})
+    state
+  end
+
+  defp sync_start(state, attempt) do
+    with {:ok, state} <- connection(state),
+         {:ok, connection} <- Rabbit.Connection.fetch(state.connection),
+         {:ok, state} <- channel(state, connection),
+         {:ok, state} <- handle_setup(state),
+         {:ok, state} <- consume(state) do
+      %{state | started_mode: :sync}
+    else
+      _ ->
+        :timer.sleep(state.sync_start_delay)
+        sync_start(state, attempt + 1)
+    end
   end
 
   defp connection(%{connection_subscribed: true} = state), do: {:ok, state}
