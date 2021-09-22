@@ -20,7 +20,7 @@ defmodule Rabbit.MixProject do
   # Run "mix help compile.app" to learn about applications.
   def application do
     [
-      extra_applications: [:lager, :logger],
+      extra_applications: [:logger],
       mod: {Rabbit.Application, []}
     ]
   end
@@ -51,7 +51,7 @@ defmodule Rabbit.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      {:amqp, "~> 2.1"},
+      {:amqp, "~> 3.0"},
       {:poolboy, "~> 1.5"},
       {:keyword_validator, "~> 1.0"},
       {:jason, "~> 1.2", optional: true},
