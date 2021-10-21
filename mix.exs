@@ -1,7 +1,7 @@
 defmodule Rabbit.MixProject do
   use Mix.Project
 
-  @version "0.14.0"
+  @version "0.16.0"
 
   def project do
     [
@@ -20,8 +20,7 @@ defmodule Rabbit.MixProject do
   # Run "mix help compile.app" to learn about applications.
   def application do
     [
-      extra_applications: [:logger],
-      mod: {Rabbit.Application, []}
+      extra_applications: [:logger]
     ]
   end
 
