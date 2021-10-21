@@ -7,6 +7,8 @@ defmodule Rabbit.Consumer.Server do
 
   require Logger
 
+  alias Rabbit.Consumer.Worker
+
   @opts_schema %{
     connection: [type: [:tuple, :pid, :atom], required: true],
     queue: [type: :binary, required: false],
@@ -147,7 +149,7 @@ defmodule Rabbit.Consumer.Server do
 
   @impl GenServer
   def terminate(_reason, state) do
-    disconnect(state)
+    :ok = stop_consumer(state)
   end
 
   ################################
@@ -155,9 +157,12 @@ defmodule Rabbit.Consumer.Server do
   ################################
 
   defp init_state(module, opts) do
+    {:ok, worker} = Worker.start_link()
+
     %{
       name: process_name(self()),
       module: module,
+      worker: worker,
       connection: Keyword.get(opts, :connection),
       connection_subscribed: false,
       channel: nil,
@@ -289,7 +294,7 @@ defmodule Rabbit.Consumer.Server do
         state.custom_meta
       )
 
-    Rabbit.Worker.start_child(message, state.worker_opts)
+    Worker.start_child(state.worker, message, state.worker_opts)
   end
 
   defp remove_channel(state) do
@@ -303,6 +308,17 @@ defmodule Rabbit.Consumer.Server do
         consumer_tag: nil,
         setup_run: false
     }
+  end
+
+  defp stop_consumer(state) do
+    Worker.stop(state.worker)
+    disconnect(state)
+
+    Logger.info("""
+    [Rabbit.Consumer] #{inspect(state.name)}: consumer #{state.consumer_tag} terminating.
+    """)
+
+    :ok
   end
 
   defp log_error(state, error) do
