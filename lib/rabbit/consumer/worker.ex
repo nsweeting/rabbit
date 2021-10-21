@@ -14,7 +14,7 @@ defmodule Rabbit.Consumer.Worker do
 
   @doc false
   def start_child(worker, message, opts \\ []) do
-    child = {Rabbit.Worker.Executer, [message, opts]}
+    child = {Rabbit.Consumer.Executer, [message, opts]}
     DynamicSupervisor.start_child(worker, child)
   end
 
