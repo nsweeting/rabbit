@@ -1,7 +1,7 @@
 defmodule Rabbit.MixProject do
   use Mix.Project
 
-  @version "0.14.0"
+  @version "0.16.0"
 
   def project do
     [
