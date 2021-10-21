@@ -1,4 +1,4 @@
-defmodule Rabbit.Worker.Executer do
+defmodule Rabbit.Consumer.Executer do
   @moduledoc false
 
   use GenServer
@@ -141,7 +141,7 @@ defmodule Rabbit.Worker.Executer do
 
   defp log_error(message) do
     Logger.error("""
-    [Rabbit.Worker] #{inspect(message.consumer)}: executer error.
+    [Rabbit.Consumer] #{inspect(message.consumer)}: executer error.
 
     Reason:
         #{log_inspect(message.error_reason)}

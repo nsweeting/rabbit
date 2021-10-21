@@ -7,8 +7,7 @@ defmodule Rabbit.Application do
   @impl Application
   def start(_type, _args) do
     children = [
-      Rabbit.Config,
-      Rabbit.Worker.Supervisor
+      Rabbit.Config
     ]
 
     opts = [strategy: :one_for_one, name: Rabbit.Supervisor]
