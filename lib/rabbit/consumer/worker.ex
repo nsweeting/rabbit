@@ -20,7 +20,6 @@ defmodule Rabbit.Consumer.Worker do
 
   @doc false
   def stop(worker) do
-    IO.inspect("terminating worker!")
     DynamicSupervisor.stop(worker)
   end
 
