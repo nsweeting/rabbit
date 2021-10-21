@@ -3,13 +3,13 @@ defmodule Rabbit.ConfigTest do
 
   alias Rabbit.Config
 
-  describe "put/2" do
+  describe "get/1" do
     test "will return an error if key is invalid" do
-      assert {:error, :invalid_key} = Config.put(:foo, :bar)
+      assert Config.get(:foo) == :error
     end
 
-    test "will return an error if worker_pool_size is less than 1" do
-      assert {:error, ["must be greater than 0"]} = Config.put(:worker_pool_size, 0)
+    test "will return serializers" do
+      assert Config.get(:serializers) == {:ok, Rabbit.Serializer.defaults()}
     end
   end
 end
