@@ -138,8 +138,8 @@ defmodule Rabbit.Consumer.Server do
     {:noreply, state, {:continue, :after_connect}}
   end
 
-  def handle_info({:EXIT, _pid, reason}, state) do
-    state = channel_down(state, reason)
+  def handle_info({:EXIT, pid, reason}, state) do
+    state = handle_exit(state, pid, reason)
     {:noreply, state, {:continue, :restart_delay}}
   end
 
@@ -308,6 +308,21 @@ defmodule Rabbit.Consumer.Server do
         consumer_tag: nil,
         setup_run: false
     }
+  end
+
+  defp handle_exit(state, pid, reason) do
+    case state do
+      %{channel: %{pid: ^pid}} -> channel_down(state, reason)
+      %{worker: ^pid} -> worker_down(state, reason)
+    end
+  end
+
+  defp worker_down(state, reason) do
+    log_error(state, {:error, {:worker_down, reason}})
+    Process.unlink(state.channel.pid)
+    state = disconnect(state)
+    {:ok, worker} = Worker.start_link()
+    %{state | worker: worker}
   end
 
   defp stop_consumer(state) do

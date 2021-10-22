@@ -128,7 +128,7 @@ defmodule Rabbit.ConsumerTest do
     test "disconnects the amqp channel", meta do
       assert {:ok, consumer, _queue} = start_consumer(meta)
 
-      state = GenServer.call(consumer, :state)
+      state = :sys.get_state(consumer)
 
       assert Process.alive?(state.channel.pid)
       assert :ok = Consumer.stop(consumer)
@@ -143,12 +143,36 @@ defmodule Rabbit.ConsumerTest do
     assert {:ok, consumer, _queue} = start_consumer(meta)
 
     connection_state = connection_state(meta.connection)
-    consumer_state1 = GenServer.call(consumer, :state)
+    consumer_state1 = :sys.get_state(consumer)
     AMQP.Connection.close(connection_state.connection)
     await_consuming(consumer)
-    consumer_state2 = GenServer.call(consumer, :state)
+    consumer_state2 = :sys.get_state(consumer)
 
     assert consumer_state1.channel.pid != consumer_state2.channel.pid
+  end
+
+  test "will reconnect when channel stops", meta do
+    assert {:ok, consumer, _queue} = start_consumer(meta)
+
+    consumer_state1 = :sys.get_state(consumer)
+    AMQP.Channel.close(consumer_state1.channel)
+    :timer.sleep(10)
+    await_consuming(consumer)
+    consumer_state2 = :sys.get_state(consumer)
+
+    assert consumer_state1.channel.pid != consumer_state2.channel.pid
+  end
+
+  test "will reconnect when worker stops", meta do
+    assert {:ok, consumer, _queue} = start_consumer(meta)
+
+    consumer_state1 = :sys.get_state(consumer)
+    Process.exit(consumer_state1.worker, :kill)
+    :timer.sleep(10)
+    await_consuming(consumer)
+    consumer_state2 = :sys.get_state(consumer)
+
+    assert consumer_state1.worker != consumer_state2.worker
   end
 
   test "will consume messages", meta do
@@ -256,7 +280,7 @@ defmodule Rabbit.ConsumerTest do
   end
 
   defp await_consuming(consumer) do
-    state = GenServer.call(consumer, :state)
+    state = :sys.get_state(consumer)
 
     if state.consuming do
       :ok
@@ -271,6 +295,6 @@ defmodule Rabbit.ConsumerTest do
   end
 
   defp connection_state(connection) do
-    Connection.transaction(connection, &GenServer.call(&1, :state))
+    Connection.transaction(connection, &:sys.get_state(&1))
   end
 end
