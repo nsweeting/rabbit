@@ -185,12 +185,14 @@ defmodule Rabbit.Consumer.Server do
     }
   end
 
-  defp connection(%{connection_subscribed: true} = state), do: {:ok, state}
-
   defp connection(state) do
-    Rabbit.Connection.subscribe(state.connection, self())
-    state = %{state | connection_subscribed: true}
-    {:ok, state}
+    if not state.connection_subscribed do
+      Rabbit.Connection.subscribe(state.connection, self())
+      state = %{state | connection_subscribed: true}
+      {:ok, state}
+    else
+      {:ok, state}
+    end
   rescue
     error ->
       log_error(state, error)
@@ -201,25 +203,25 @@ defmodule Rabbit.Consumer.Server do
       {:error, state}
   end
 
-  defp channel(%{channel_open: true} = state, _connection), do: {:ok, state}
-
   defp channel(state, connection) do
-    case AMQP.Channel.open(connection) do
-      {:ok, channel} ->
-        Process.link(channel.pid)
-        state = %{state | channel: channel, channel_open: true}
-        {:ok, state}
+    if not state.channel_open do
+      case AMQP.Channel.open(connection) do
+        {:ok, channel} ->
+          Process.link(channel.pid)
+          state = %{state | channel: channel, channel_open: true}
+          {:ok, state}
 
-      error ->
-        log_error(state, error)
-        {:error, state}
+        error ->
+          log_error(state, error)
+          {:error, state}
+      end
+    else
+      {:ok, state}
     end
   end
 
-  defp handle_setup(%{setup_run: true} = state), do: {:ok, state}
-
   defp handle_setup(state) do
-    if function_exported?(state.module, :handle_setup, 1) do
+    if not state.setup_run and function_exported?(state.module, :handle_setup, 1) do
       case state.module.handle_setup(state) do
         :ok ->
           state = %{state | setup_run: true}
@@ -258,17 +260,16 @@ defmodule Rabbit.Consumer.Server do
     end
   end
 
-  defp start_worker(%{worker_started: true} = state), do: state
-
-  defp start_worker(%{worker_started: false} = state) do
-    {:ok, worker} = Worker.start_link()
-    %{state | worker_started: true, worker: worker}
+  defp start_worker(state) do
+    if not state.worker_started do
+      {:ok, worker} = Worker.start_link()
+      %{state | worker_started: true, worker: worker}
+    else
+      state
+    end
   end
 
-  defp stop_consumer(state, error \\ nil)
-  defp stop_consumer(%{consuming: false} = state, _error), do: state
-
-  defp stop_consumer(state, error) do
+  defp stop_consumer(state, error \\ nil) do
     if error do
       log_error(state, error)
     end
@@ -276,6 +277,18 @@ defmodule Rabbit.Consumer.Server do
     state
     |> stop_worker()
     |> close_channel()
+  end
+
+  defp stop_worker(state) do
+    if state.worker_started do
+      try do
+        :ok = Worker.stop(state.worker)
+      catch
+        _, _ -> :ok
+      end
+    end
+
+    %{state | worker: nil, worker_started: false}
   end
 
   defp close_channel(state) do
@@ -323,18 +336,6 @@ defmodule Rabbit.Consumer.Server do
       )
 
     Worker.start_child(state.worker, message, state.worker_opts)
-  end
-
-  defp stop_worker(state) do
-    if state.worker_started do
-      try do
-        :ok = Worker.stop(state.worker)
-      catch
-        _, _ -> :ok
-      end
-    end
-
-    %{state | worker: nil, worker_started: false}
   end
 
   defp log_error(state, error) do
