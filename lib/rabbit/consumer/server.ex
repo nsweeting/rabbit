@@ -116,7 +116,7 @@ defmodule Rabbit.Consumer.Server do
   end
 
   def handle_info({:disconnected, reason}, state) do
-    state = disconnect(state, reason)
+    state = stop_consumer(state, reason)
     {:noreply, state}
   end
 
@@ -134,12 +134,12 @@ defmodule Rabbit.Consumer.Server do
   end
 
   def handle_info({:basic_cancel, _} = error, state) do
-    state = disconnect(state, error)
+    state = stop_consumer(state, error)
     {:noreply, state, {:continue, :restart_delay}}
   end
 
   def handle_info({:EXIT, _, _} = exit_msg, state) do
-    state = disconnect(state, exit_msg)
+    state = stop_consumer(state, exit_msg)
     {:noreply, state, {:continue, :restart_delay}}
   end
 
@@ -149,7 +149,7 @@ defmodule Rabbit.Consumer.Server do
 
   @impl GenServer
   def terminate(_reason, state) do
-    disconnect(state)
+    stop_consumer(state)
 
     Logger.info("""
     [Rabbit.Consumer] #{inspect(state.name)}: consumer #{state.consumer_tag} terminating.
@@ -265,10 +265,10 @@ defmodule Rabbit.Consumer.Server do
     %{state | worker_started: true, worker: worker}
   end
 
-  defp disconnect(state, error \\ nil)
-  defp disconnect(%{channel_open: false} = state, _error), do: state
+  defp stop_consumer(state, error \\ nil)
+  defp stop_consumer(%{consuming: false} = state, _error), do: state
 
-  defp disconnect(state, error) do
+  defp stop_consumer(state, error) do
     if error do
       log_error(state, error)
     end
@@ -279,7 +279,7 @@ defmodule Rabbit.Consumer.Server do
   end
 
   defp close_channel(state) do
-    if Process.alive?(state.channel.pid) do
+    if state.channel_open do
       Process.unlink(state.channel.pid)
 
       try do
@@ -326,7 +326,7 @@ defmodule Rabbit.Consumer.Server do
   end
 
   defp stop_worker(state) do
-    if is_pid(state.worker) and Process.alive?(state.worker) do
+    if state.worker_started do
       try do
         :ok = Worker.stop(state.worker)
       catch
@@ -339,7 +339,7 @@ defmodule Rabbit.Consumer.Server do
 
   defp log_error(state, error) do
     Logger.error("""
-    [Rabbit.Consumer] #{inspect(state.name)}: consumer error.
+    [Rabbit.Consumer] #{inspect(state.name)}: consumer error. Restarting...
     Detail: #{inspect(error)}
     """)
   end

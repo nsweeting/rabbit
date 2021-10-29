@@ -189,7 +189,7 @@ defmodule Rabbit.Topology.Server do
 
   defp log_error(error) do
     Logger.error("""
-    [Rabbit.Topology] #{inspect(process_name(self()))}: setup error.
+    [Rabbit.Topology] #{inspect(process_name(self()))}: setup error. Restarting...
     Detail: #{inspect(error)}
     """)
   end
