@@ -278,7 +278,7 @@ defmodule Rabbit.Producer.Server do
 
   defp log_error(state, error) do
     Logger.error("""
-    [Rabbit.Producer] #{inspect(state.name)}: producer error.
+    [Rabbit.Producer] #{inspect(state.name)}: producer error. Restarting...
     Detail: #{inspect(error)}
     """)
   end

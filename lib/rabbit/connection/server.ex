@@ -267,7 +267,7 @@ defmodule Rabbit.Connection.Server do
 
   defp log_error(state, error) do
     Logger.error("""
-    [Rabbit.Connection] #{inspect(state.name)}: connection error.
+    [Rabbit.Connection] #{inspect(state.name)}: connection error. Restarting...
     Detail: #{inspect(error)}
     """)
   end

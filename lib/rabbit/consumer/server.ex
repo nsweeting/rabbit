@@ -116,7 +116,7 @@ defmodule Rabbit.Consumer.Server do
   end
 
   def handle_info({:disconnected, reason}, state) do
-    state = channel_down(state, reason)
+    state = stop_consumer(state, reason)
     {:noreply, state}
   end
 
@@ -133,13 +133,13 @@ defmodule Rabbit.Consumer.Server do
     {:noreply, state}
   end
 
-  def handle_info({:basic_cancel, _}, state) do
-    log_error(state, :basic_cancel)
-    {:noreply, state, {:continue, :after_connect}}
+  def handle_info({:basic_cancel, _} = error, state) do
+    state = stop_consumer(state, error)
+    {:noreply, state, {:continue, :restart_delay}}
   end
 
-  def handle_info({:EXIT, _pid, reason}, state) do
-    state = channel_down(state, reason)
+  def handle_info({:EXIT, _, _} = exit_msg, state) do
+    state = stop_consumer(state, exit_msg)
     {:noreply, state, {:continue, :restart_delay}}
   end
 
@@ -149,7 +149,13 @@ defmodule Rabbit.Consumer.Server do
 
   @impl GenServer
   def terminate(_reason, state) do
-    :ok = stop_consumer(state)
+    stop_consumer(state)
+
+    Logger.info("""
+    [Rabbit.Consumer] #{inspect(state.name)}: consumer #{state.consumer_tag} terminating.
+    """)
+
+    :ok
   end
 
   ################################
@@ -157,18 +163,17 @@ defmodule Rabbit.Consumer.Server do
   ################################
 
   defp init_state(module, opts) do
-    {:ok, worker} = Worker.start_link()
-
     %{
       name: process_name(self()),
       module: module,
-      worker: worker,
       connection: Keyword.get(opts, :connection),
       connection_subscribed: false,
       channel: nil,
       channel_open: false,
       setup_run: false,
       consuming: false,
+      worker: nil,
+      worker_started: false,
       consumer_tag: nil,
       restart_attempts: 0,
       queue: Keyword.get(opts, :queue),
@@ -180,12 +185,14 @@ defmodule Rabbit.Consumer.Server do
     }
   end
 
-  defp connection(%{connection_subscribed: true} = state), do: {:ok, state}
-
   defp connection(state) do
-    Rabbit.Connection.subscribe(state.connection, self())
-    state = %{state | connection_subscribed: true}
-    {:ok, state}
+    if not state.connection_subscribed do
+      Rabbit.Connection.subscribe(state.connection, self())
+      state = %{state | connection_subscribed: true}
+      {:ok, state}
+    else
+      {:ok, state}
+    end
   rescue
     error ->
       log_error(state, error)
@@ -196,25 +203,25 @@ defmodule Rabbit.Consumer.Server do
       {:error, state}
   end
 
-  defp channel(%{channel_open: true} = state, _connection), do: {:ok, state}
-
   defp channel(state, connection) do
-    case AMQP.Channel.open(connection) do
-      {:ok, channel} ->
-        Process.link(channel.pid)
-        state = %{state | channel: channel, channel_open: true}
-        {:ok, state}
+    if not state.channel_open do
+      case AMQP.Channel.open(connection) do
+        {:ok, channel} ->
+          Process.link(channel.pid)
+          state = %{state | channel: channel, channel_open: true}
+          {:ok, state}
 
-      error ->
-        log_error(state, error)
-        {:error, state}
+        error ->
+          log_error(state, error)
+          {:error, state}
+      end
+    else
+      {:ok, state}
     end
   end
 
-  defp handle_setup(%{setup_run: true} = state), do: {:ok, state}
-
   defp handle_setup(state) do
-    if function_exported?(state.module, :handle_setup, 1) do
+    if not state.setup_run and function_exported?(state.module, :handle_setup, 1) do
       case state.module.handle_setup(state) do
         :ok ->
           state = %{state | setup_run: true}
@@ -243,6 +250,7 @@ defmodule Rabbit.Consumer.Server do
       [Rabbit.Consumer] #{inspect(state.name)}: consumer #{tag} started.
       """)
 
+      state = start_worker(state)
       state = %{state | consuming: true, consumer_tag: tag}
       {:ok, state}
     else
@@ -252,17 +260,58 @@ defmodule Rabbit.Consumer.Server do
     end
   end
 
-  defp disconnect(%{channel_open: false} = state), do: state
-
-  defp disconnect(state) do
-    close_channel(state)
-    remove_channel(state)
+  defp start_worker(state) do
+    if not state.worker_started do
+      {:ok, worker} = Worker.start_link()
+      %{state | worker_started: true, worker: worker}
+    else
+      state
+    end
   end
 
-  defp close_channel(%{channel: channel}) do
-    if Process.alive?(channel.pid), do: AMQP.Channel.close(channel)
-  catch
-    _, _ -> :ok
+  defp stop_consumer(state, error \\ nil) do
+    if error do
+      log_error(state, error)
+    end
+
+    state
+    |> stop_worker()
+    |> close_channel()
+  end
+
+  defp stop_worker(state) do
+    if state.worker_started do
+      try do
+        :ok = Worker.stop(state.worker)
+      catch
+        _, _ -> :ok
+      end
+    end
+
+    %{state | worker: nil, worker_started: false}
+  end
+
+  defp close_channel(state) do
+    if state.channel_open do
+      Process.unlink(state.channel.pid)
+
+      try do
+        AMQP.Channel.close(state.channel)
+      catch
+        _, _ -> :ok
+      end
+    end
+
+    %{
+      state
+      | restart_attempts: 0,
+        connection_subscribed: false,
+        channel: nil,
+        channel_open: false,
+        consuming: false,
+        consumer_tag: nil,
+        setup_run: false
+    }
   end
 
   defp restart_delay(state) do
@@ -270,14 +319,6 @@ defmodule Rabbit.Consumer.Server do
     delay = calculate_delay(restart_attempts)
     Process.send_after(self(), :restart, delay)
     %{state | restart_attempts: restart_attempts}
-  end
-
-  defp channel_down(%{channel_open: false} = state, _reason), do: state
-  defp channel_down(state, :normal), do: remove_channel(state)
-
-  defp channel_down(state, reason) do
-    log_error(state, reason)
-    remove_channel(state)
   end
 
   defp calculate_delay(attempt) when attempt > 5, do: 5_000
@@ -297,33 +338,9 @@ defmodule Rabbit.Consumer.Server do
     Worker.start_child(state.worker, message, state.worker_opts)
   end
 
-  defp remove_channel(state) do
-    %{
-      state
-      | restart_attempts: 0,
-        connection_subscribed: false,
-        channel: nil,
-        channel_open: false,
-        consuming: false,
-        consumer_tag: nil,
-        setup_run: false
-    }
-  end
-
-  defp stop_consumer(state) do
-    Worker.stop(state.worker)
-    disconnect(state)
-
-    Logger.info("""
-    [Rabbit.Consumer] #{inspect(state.name)}: consumer #{state.consumer_tag} terminating.
-    """)
-
-    :ok
-  end
-
   defp log_error(state, error) do
     Logger.error("""
-    [Rabbit.Consumer] #{inspect(state.name)}: consumer error.
+    [Rabbit.Consumer] #{inspect(state.name)}: consumer error. Restarting...
     Detail: #{inspect(error)}
     """)
   end
