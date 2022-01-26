@@ -22,7 +22,8 @@ defmodule Rabbit.Consumer.Server do
     arguments: [type: :list, default: []],
     timeout: [type: [:integer, :atom], required: false],
     custom_meta: [type: :map, default: %{}],
-    setup_opts: [type: :list, default: [], required: false]
+    setup_opts: [type: :list, default: [], required: false],
+    workers: [type: :integer, required: false]
   }
 
   @qos_opts [
@@ -138,6 +139,10 @@ defmodule Rabbit.Consumer.Server do
     {:noreply, state, {:continue, :restart_delay}}
   end
 
+  def handle_info({:EXIT, _, :normal}, state) do
+    {:noreply, state}
+  end
+
   def handle_info({:EXIT, _, _} = exit_msg, state) do
     state = stop_consumer(state, exit_msg)
     {:noreply, state, {:continue, :restart_delay}}
@@ -172,25 +177,26 @@ defmodule Rabbit.Consumer.Server do
       channel_open: false,
       setup_run: false,
       consuming: false,
-      worker: nil,
-      worker_started: false,
+      workers: nil,
+      workers_started: false,
+      workers_count: Keyword.get(opts, :workers, System.schedulers_online()),
+      worker_opts: Keyword.take(opts, @worker_opts),
       consumer_tag: nil,
       restart_attempts: 0,
       queue: Keyword.get(opts, :queue),
       qos_opts: Keyword.take(opts, @qos_opts),
       consume_opts: Keyword.take(opts, @consume_opts),
-      worker_opts: Keyword.take(opts, @worker_opts),
       custom_meta: Keyword.get(opts, :custom_meta),
       setup_opts: Keyword.get(opts, :setup_opts)
     }
   end
 
   defp connection(state) do
-    if not state.connection_subscribed do
-      Rabbit.Connection.subscribe(state.connection, self())
-      state = %{state | connection_subscribed: true}
+    if state.connection_subscribed do
       {:ok, state}
     else
+      Rabbit.Connection.subscribe(state.connection, self())
+      state = %{state | connection_subscribed: true}
       {:ok, state}
     end
   rescue
@@ -204,7 +210,9 @@ defmodule Rabbit.Consumer.Server do
   end
 
   defp channel(state, connection) do
-    if not state.channel_open do
+    if state.channel_open do
+      {:ok, state}
+    else
       case AMQP.Channel.open(connection) do
         {:ok, channel} ->
           Process.link(channel.pid)
@@ -215,8 +223,6 @@ defmodule Rabbit.Consumer.Server do
           log_error(state, error)
           {:error, state}
       end
-    else
-      {:ok, state}
     end
   end
 
@@ -250,7 +256,7 @@ defmodule Rabbit.Consumer.Server do
       [Rabbit.Consumer] #{inspect(state.name)}: consumer #{tag} started.
       """)
 
-      state = start_worker(state)
+      state = start_workers(state)
       state = %{state | consuming: true, consumer_tag: tag}
       {:ok, state}
     else
@@ -260,12 +266,17 @@ defmodule Rabbit.Consumer.Server do
     end
   end
 
-  defp start_worker(state) do
-    if not state.worker_started do
-      {:ok, worker} = Worker.start_link()
-      %{state | worker_started: true, worker: worker}
-    else
+  defp start_workers(state) do
+    if state.workers_started do
       state
+    else
+      workers =
+        Enum.map(1..state.workers_count, fn _ ->
+          {:ok, worker} = Worker.start_link()
+          worker
+        end)
+
+      %{state | workers_started: true, workers: workers}
     end
   end
 
@@ -275,20 +286,22 @@ defmodule Rabbit.Consumer.Server do
     end
 
     state
-    |> stop_worker()
+    |> stop_workers()
     |> close_channel()
   end
 
-  defp stop_worker(state) do
-    if state.worker_started do
-      try do
-        :ok = Worker.stop(state.worker)
-      catch
-        _, _ -> :ok
-      end
+  defp stop_workers(state) do
+    if state.workers_started do
+      Enum.each(state.workers, fn worker ->
+        try do
+          :ok = Worker.stop(worker)
+        catch
+          _, _ -> :ok
+        end
+      end)
     end
 
-    %{state | worker: nil, worker_started: false}
+    %{state | workers: nil, workers_started: false}
   end
 
   defp close_channel(state) do
@@ -335,7 +348,8 @@ defmodule Rabbit.Consumer.Server do
         state.custom_meta
       )
 
-    Worker.start_child(state.worker, message, state.worker_opts)
+    worker = Enum.random(state.workers)
+    Worker.start_child(worker, message, state.worker_opts)
   end
 
   defp log_error(state, error) do

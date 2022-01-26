@@ -144,7 +144,8 @@ defmodule Rabbit.ConsumerTest do
 
     connection_state = connection_state(meta.connection)
     consumer_state1 = :sys.get_state(consumer)
-    AMQP.Connection.close(connection_state.connection)
+    Process.exit(connection_state.connection.pid, :killed)
+    :timer.sleep(20)
     await_consuming(consumer)
     consumer_state2 = :sys.get_state(consumer)
 
@@ -155,8 +156,8 @@ defmodule Rabbit.ConsumerTest do
     assert {:ok, consumer, _queue} = start_consumer(meta)
 
     consumer_state1 = :sys.get_state(consumer)
-    AMQP.Channel.close(consumer_state1.channel)
-    :timer.sleep(10)
+    Process.exit(consumer_state1.channel.pid, :killed)
+    :timer.sleep(20)
     await_consuming(consumer)
     consumer_state2 = :sys.get_state(consumer)
 
@@ -167,12 +168,13 @@ defmodule Rabbit.ConsumerTest do
     assert {:ok, consumer, _queue} = start_consumer(meta)
 
     consumer_state1 = :sys.get_state(consumer)
-    Process.exit(consumer_state1.worker, :kill)
-    :timer.sleep(10)
+    worker = Enum.random(consumer_state1.workers)
+    Process.exit(worker, :kill)
+    :timer.sleep(20)
     await_consuming(consumer)
     consumer_state2 = :sys.get_state(consumer)
 
-    assert consumer_state1.worker != consumer_state2.worker
+    assert consumer_state1.workers != consumer_state2.workers
   end
 
   test "will consume messages", meta do

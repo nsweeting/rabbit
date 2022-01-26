@@ -100,6 +100,8 @@ defmodule Rabbit.Consumer do
           | {:arguments, Keyword.t()}
           | {:custom_meta, map()}
           | {:setup_opts, setup_options()}
+          | {:workers, non_neg_integer()}
+          | {:timeout, timeout()}
   @type options :: [option()]
   @type delivery_tag :: non_neg_integer()
   @type action_options :: [{:multiple, boolean()} | {:requeue, boolean()}]
@@ -217,6 +219,10 @@ defmodule Rabbit.Consumer do
     * `:custom_meta` - A map of custom data that will be included in each `Rabbit.Message`
       handled by the consumer.
     * `:setup_opts` - A keyword list of custom options for use in `c:handle_setup/1`.
+    * `:workers` - The number of workers available to process messages - defaults
+      to `System.schedulers_online()`.
+    * `:timeout` - The timeout in milliseconds for each message processed - defaults
+      to `60_000`.
 
   ## Server Options
 
