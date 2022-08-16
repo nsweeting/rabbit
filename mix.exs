@@ -1,7 +1,7 @@
 defmodule Rabbit.MixProject do
   use Mix.Project
 
-  @version "0.16.1"
+  @version "0.17.0"
 
   def project do
     [
@@ -56,9 +56,9 @@ defmodule Rabbit.MixProject do
       {:jason, "~> 1.2", optional: true},
       {:benchee, "~> 1.0", only: :dev, runtime: false},
       {:dialyxir, "~> 1.0", only: [:dev, :test], runtime: false},
-      {:credo, "~> 1.4", only: [:dev, :test], runtime: false},
+      {:credo, "~> 1.6", only: [:dev, :test], runtime: false},
       {:inch_ex, github: "rrrene/inch_ex", only: [:dev, :test], runtime: false},
-      {:ex_doc, "~> 0.22", only: :dev, runtime: false}
+      {:ex_doc, "~> 0.28", only: :dev, runtime: false}
     ]
   end
 end
