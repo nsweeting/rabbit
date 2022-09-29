@@ -14,28 +14,29 @@ jobs:
     name: Elixir ${{ matrix.elixir }} / OTP ${{ matrix.otp }}
     strategy:
       matrix:
-        otp: ['23', '24', '25']
+        otp: ['23', '24']
         elixir: ['1.11', '1.12', '1.13', '1.14']
     steps:
-      - uses: actions/checkout@v2
-      - run: docker-compose up -d
-      - uses: erlef/setup-beam@v1
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Start RabbitMQ
+        run: docker-compose up -d
+
+      - name: Set up Elixir
+        uses: erlef/setup-beam@v1
         with:
+          elixir-version: ${{ matrix.elixir }}
           otp-version: ${{ matrix.otp }}
-          elixir-version: ${{matrix.elixir}}
-      - name: Restore the deps cache
-        uses: actions/cache@v1
+        
+      - name: Restore deps and _build cache
+        uses: actions/cache@v3
         with:
-          path: deps
-          key: ${{ runner.os }}-${{ matrix.elixir }}-${{ matrix.otp }}-deps-mixlockhash-${{ hashFiles(format('{0}{1}', github.workspace, '/mix.lock')) }}
+          path: |
+            deps
+            _build
+          key: deps-${{ runner.os }}-${{ matrix.otp }}-${{ matrix.elixir }}-${{ hashFiles('**/mix.lock') }}
           restore-keys: |
-            ${{ runner.os }}-${{ matrix.elixir }}-${{ matrix.otp }}-deps-
-      - name: Restore the _build cache
-        uses: actions/cache@v1
-        id: build-cache
-        with:
-          path: _build
-          key: ${{ runner.os }}-${{ matrix.elixir }}-${{ matrix.otp }}-${{ env.MIX_ENV }}-build-mixlockhash-${{ hashFiles(format('{0}{1}', github.workspace, '/mix.lock')) }}
-          restore-keys: |
-            ${{ runner.os }}-${{ matrix.elixir }}-${{ matrix.otp }}-${{ env.MIX_ENV }}-build-
+            deps-${{ runner.os }}-${{ matrix.otp }}-${{ matrix.elixir }}
+  
       - run: mix ci
