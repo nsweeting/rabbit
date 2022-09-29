@@ -10,9 +10,10 @@ defmodule Rabbit.Utilities do
   end
 
   @doc false
-  @spec validate_opts(keyword(), map()) :: {:ok, keyword()} | {:error, keyword()}
-  def validate_opts(opts, schema) do
-    case KeywordValidator.validate(opts, schema) do
+  @spec validate_opts(keyword(), KeywordValidator.schema(), keyword()) ::
+          {:ok, keyword()} | {:error, keyword()}
+  def validate_opts(keyword, schema, opts \\ []) do
+    case KeywordValidator.validate(keyword, schema, opts) do
       {:ok, _} = result -> result
       {:error, reason} -> {:stop, reason}
     end

@@ -52,7 +52,7 @@ defmodule Rabbit.MixProject do
     [
       {:amqp, "~> 3.0"},
       {:poolboy, "~> 1.5"},
-      {:keyword_validator, "~> 1.0"},
+      {:keyword_validator, "~> 2.0"},
       {:jason, "~> 1.2", optional: true},
       {:benchee, "~> 1.0", only: :dev, runtime: false},
       {:dialyxir, "~> 1.0", only: [:dev, :test], runtime: false},

@@ -9,22 +9,22 @@ defmodule Rabbit.Consumer.Server do
 
   alias Rabbit.Consumer.Worker
 
-  @opts_schema %{
-    connection: [type: [:tuple, :pid, :atom], required: true],
-    queue: [type: :binary, required: false],
-    prefetch_count: [type: :integer, default: 1],
-    prefetch_size: [type: :integer, default: 0],
-    consumer_tag: [type: :binary, default: ""],
-    no_local: [type: :boolean, default: false],
-    no_ack: [type: :boolean, default: false],
-    exclusive: [type: :boolean, default: false],
-    nowait: [type: :boolean, default: false],
-    arguments: [type: :list, default: []],
-    timeout: [type: [:integer, :atom], required: false],
-    custom_meta: [type: :map, default: %{}],
-    setup_opts: [type: :list, default: [], required: false],
-    workers: [type: :integer, required: false]
-  }
+  @opts_schema KeywordValidator.schema!(
+                 connection: [is: {:one_of, [:tuple, :pid, :atom]}, required: true],
+                 queue: [is: :binary, required: false],
+                 prefetch_count: [is: :integer, default: 1],
+                 prefetch_size: [is: :integer, default: 0],
+                 consumer_tag: [is: :binary, default: ""],
+                 no_local: [is: :boolean, default: false],
+                 no_ack: [is: :boolean, default: false],
+                 exclusive: [is: :boolean, default: false],
+                 nowait: [is: :boolean, default: false],
+                 arguments: [is: :list, default: []],
+                 timeout: [is: {:one_of, [:integer, :atom]}, required: false],
+                 custom_meta: [is: :map, default: %{}],
+                 setup_opts: [is: :list, default: [], required: false],
+                 workers: [is: :integer, required: false]
+               )
 
   @qos_opts [
     :prefetch_size,

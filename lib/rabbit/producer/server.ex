@@ -7,14 +7,14 @@ defmodule Rabbit.Producer.Server do
 
   import Rabbit.Utilities
 
-  @opts_schema %{
-    connection: [type: [:tuple, :pid, :atom], required: true],
-    sync_start: [type: :boolean, required: true, default: true],
-    sync_start_delay: [type: :integer, required: true, default: 50],
-    sync_start_max: [type: :integer, required: true, default: 100],
-    publish_opts: [type: :list, default: []],
-    setup_opts: [type: :list, required: false]
-  }
+  @opts_schema KeywordValidator.schema!(
+                 connection: [is: {:one_of, [:tuple, :pid, :atom]}, required: true],
+                 sync_start: [is: :boolean, required: true, default: true],
+                 sync_start_delay: [is: :integer, required: true, default: 50],
+                 sync_start_max: [is: :integer, required: true, default: 100],
+                 publish_opts: [is: :list, default: []],
+                 setup_opts: [is: :list, required: false]
+               )
 
   ################################
   # Public API

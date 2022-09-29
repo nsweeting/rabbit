@@ -9,9 +9,7 @@ defmodule Rabbit.Consumer.Executer do
 
   alias Rabbit.Message
 
-  @opts_schema %{
-    timeout: [type: :integer, default: 60_000]
-  }
+  @opts_schema KeywordValidator.schema!(timeout: [is: :integer, default: 60_000])
 
   ################################
   # Public API
