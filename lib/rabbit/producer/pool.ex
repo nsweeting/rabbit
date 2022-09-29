@@ -1,8 +1,6 @@
 defmodule Rabbit.Producer.Pool do
   @moduledoc false
 
-  import Rabbit.Utilities
-
   alias Rabbit.Producer.Server
 
   @opts_schema KeywordValidator.schema!(
@@ -30,7 +28,7 @@ defmodule Rabbit.Producer.Pool do
     worker_opts = get_worker_opts(module, opts)
 
     with {:ok, opts} <- module.init(:producer_pool, opts),
-         {:ok, opts} <- validate_opts(opts, @opts_schema, strict: false) do
+         {:ok, opts} <- validate_opts(opts) do
       pool_opts = get_pool_opts(opts, server_opts)
       :poolboy.start_link(pool_opts, worker_opts)
     end
@@ -39,6 +37,10 @@ defmodule Rabbit.Producer.Pool do
   ################################
   # Private API
   ################################
+
+  defp validate_opts(opts) do
+    KeywordValidator.validate(opts, @opts_schema, strict: false)
+  end
 
   defp get_pool_opts(opts, server_opts) do
     [
@@ -61,8 +63,7 @@ defmodule Rabbit.Producer.Pool do
   end
 
   defp get_worker_opts(module, opts) do
-    pool_opts = Map.keys(@opts_schema)
-    opts = Keyword.drop(opts, pool_opts)
+    opts = Keyword.drop(opts, [:pool_size, :max_overflow, :strategy])
     Keyword.put(opts, :module, module)
   end
 end
