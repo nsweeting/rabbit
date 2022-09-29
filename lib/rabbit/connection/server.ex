@@ -7,24 +7,24 @@ defmodule Rabbit.Connection.Server do
 
   require Logger
 
-  @opts_schema %{
-    name: [type: :binary, required: false],
-    uri: [type: :binary, required: false],
-    username: [type: :binary, required: false],
-    password: [type: :binary, required: false],
-    virtual_host: [type: :binary, required: false],
-    host: [type: :binary, required: false],
-    port: [type: :integer, required: false],
-    channel_max: [type: :integer, required: false],
-    frame_max: [type: :integer, required: false],
-    heartbeat: [type: :integer, required: false],
-    connection_timeout: [type: :integer, required: false],
-    ssl_options: [type: [:binary, :atom], required: false],
-    client_properties: [type: :list, required: false],
-    socket_options: [type: :list, required: false],
-    retry_backoff: [type: :integer, default: 1_000, required: true],
-    retry_max_delay: [type: :integer, default: 5_000, required: true]
-  }
+  @opts_schema KeywordValidator.schema!(
+                 name: [is: :binary, required: false],
+                 uri: [is: :binary, required: false],
+                 username: [is: :binary, required: false],
+                 password: [is: :binary, required: false],
+                 virtual_host: [is: :binary, required: false],
+                 host: [is: :binary, required: false],
+                 port: [is: :integer, required: false],
+                 channel_max: [is: :integer, required: false],
+                 frame_max: [is: :integer, required: false],
+                 heartbeat: [is: :integer, required: false],
+                 connection_timeout: [is: :integer, required: false],
+                 ssl_options: [is: {:one_of, [:binary, :atom]}, required: false],
+                 client_properties: [is: :list, required: false],
+                 socket_options: [is: :list, required: false],
+                 retry_backoff: [is: :integer, default: 1_000, required: true],
+                 retry_max_delay: [is: :integer, default: 5_000, required: true]
+               )
 
   @connection_opts [
     :name,

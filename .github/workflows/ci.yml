@@ -1,0 +1,43 @@
+name: CI
+on:
+  push:
+    branches:
+      - master
+
+  pull_request:
+    branches:
+      - master
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    name: Elixir ${{ matrix.elixir }} / OTP ${{ matrix.otp }}
+    strategy:
+      matrix:
+        otp: ['23', '24']
+        elixir: ['1.11', '1.12', '1.13', '1.14']
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Start RabbitMQ
+        run: docker-compose up -d
+
+      - name: Set up Elixir
+        uses: erlef/setup-beam@v1
+        with:
+          elixir-version: ${{ matrix.elixir }}
+          otp-version: ${{ matrix.otp }}
+        
+      - name: Restore deps and _build cache
+        uses: actions/cache@v3
+        with:
+          path: |
+            deps
+            _build
+          key: deps-${{ runner.os }}-${{ matrix.otp }}-${{ matrix.elixir }}-${{ hashFiles('**/mix.lock') }}
+          restore-keys: |
+            deps-${{ runner.os }}-${{ matrix.otp }}-${{ matrix.elixir }}
+  
+      - name: Run CI
+        run: mix ci

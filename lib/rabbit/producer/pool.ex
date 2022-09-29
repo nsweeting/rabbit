@@ -3,11 +3,11 @@ defmodule Rabbit.Producer.Pool do
 
   alias Rabbit.Producer.Server
 
-  @opts_schema %{
-    pool_size: [type: :integer, default: 1, required: true],
-    max_overflow: [type: :integer, default: 0, required: true],
-    strategy: [type: :atom, default: :lifo, required: true]
-  }
+  @opts_schema KeywordValidator.schema!(
+                 pool_size: [is: :integer, default: 1, required: true],
+                 max_overflow: [is: :integer, default: 0, required: true],
+                 strategy: [is: :atom, default: :lifo, required: true]
+               )
 
   defmodule Worker do
     @moduledoc false
@@ -63,8 +63,7 @@ defmodule Rabbit.Producer.Pool do
   end
 
   defp get_worker_opts(module, opts) do
-    pool_opts = Map.keys(@opts_schema)
-    opts = Keyword.drop(opts, pool_opts)
+    opts = Keyword.drop(opts, [:pool_size, :max_overflow, :strategy])
     Keyword.put(opts, :module, module)
   end
 end

@@ -1,7 +1,7 @@
 defmodule Rabbit.MixProject do
   use Mix.Project
 
-  @version "0.17.0"
+  @version "0.18.0"
 
   def project do
     [
@@ -13,7 +13,9 @@ defmodule Rabbit.MixProject do
       description: description(),
       package: package(),
       name: "Rabbit",
-      docs: docs()
+      docs: docs(),
+      aliases: aliases(),
+      preferred_cli_env: preferred_cli_env()
     ]
   end
 
@@ -47,12 +49,32 @@ defmodule Rabbit.MixProject do
     ]
   end
 
+  # Aliases are shortcuts or tasks specific to the current project.
+  defp aliases do
+    [
+      ci: [
+        "deps.get",
+        "compile --warnings-as-errors",
+        "format --check-formatted",
+        "credo --strict",
+        "test"
+      ]
+    ]
+  end
+
+  # Specifies the preferred env for mix commands.
+  defp preferred_cli_env do
+    [
+      ci: :test
+    ]
+  end
+
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
       {:amqp, "~> 3.0"},
       {:poolboy, "~> 1.5"},
-      {:keyword_validator, "~> 1.0"},
+      {:keyword_validator, "~> 2.0"},
       {:jason, "~> 1.2", optional: true},
       {:benchee, "~> 1.0", only: :dev, runtime: false},
       {:dialyxir, "~> 1.0", only: [:dev, :test], runtime: false},

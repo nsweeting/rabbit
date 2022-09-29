@@ -7,44 +7,48 @@ defmodule Rabbit.Topology.Server do
 
   require Logger
 
-  @exchange_schema %{
-    name: [type: :binary, required: true],
-    type: [type: :atom, required: true, default: :direct],
-    durable: [type: :boolean, required: true, default: false],
-    passive: [type: :boolean, required: true, default: false],
-    auto_delete: [type: :boolean, required: true, default: false],
-    internal: [type: :boolean, required: true, default: false],
-    nowait: [type: :boolean, required: true, default: false],
-    arguments: [type: :list, required: true, default: []]
-  }
+  @exchange_schema KeywordValidator.schema!(
+                     name: [is: :binary, required: true],
+                     type: [is: :atom, required: true, default: :direct],
+                     durable: [is: :boolean, required: true, default: false],
+                     passive: [is: :boolean, required: true, default: false],
+                     auto_delete: [is: :boolean, required: true, default: false],
+                     internal: [is: :boolean, required: true, default: false],
+                     nowait: [is: :boolean, required: true, default: false],
+                     arguments: [is: :list, required: true, default: []]
+                   )
   @exchange_opts [:durable, :passive, :auto_delete, :internal, :nowait, :arguments]
-  @queue_schema %{
-    name: [type: :binary, required: true],
-    durable: [type: :boolean, required: true, default: false],
-    auto_delete: [type: :boolean, required: true, default: false],
-    exclusive: [type: :boolean, required: true, default: false],
-    passive: [type: :boolean, required: true, default: false],
-    nowait: [type: :boolean, required: true, default: false],
-    arguments: [type: :list, required: true, default: []]
-  }
+  @queue_schema KeywordValidator.schema!(
+                  name: [is: :binary, required: true],
+                  durable: [is: :boolean, required: true, default: false],
+                  auto_delete: [is: :boolean, required: true, default: false],
+                  exclusive: [is: :boolean, required: true, default: false],
+                  passive: [is: :boolean, required: true, default: false],
+                  nowait: [is: :boolean, required: true, default: false],
+                  arguments: [is: :list, required: true, default: []]
+                )
   @queue_opts [:durable, :passive, :auto_delete, :exclusive, :nowait, :arguments]
-  @binding_schema %{
-    type: [type: :atom, inclusion: [:queue, :exchange], required: true],
-    source: [type: :binary, required: true],
-    destination: [type: :binary, required: true],
-    routing_key: [type: :binary, required: true, default: ""],
-    nowait: [type: :boolean, required: true, default: false],
-    arguments: [type: :list, required: true, default: []]
-  }
+  @binding_schema KeywordValidator.schema!(
+                    type: [is: {:in, [:queue, :exchange]}, required: true],
+                    source: [is: :binary, required: true],
+                    destination: [is: :binary, required: true],
+                    routing_key: [is: :binary, required: true, default: ""],
+                    nowait: [is: :boolean, required: true, default: false],
+                    arguments: [is: :list, required: true, default: []]
+                  )
   @binding_opts [:routing_key, :nowait, :arguments]
-  @opts_schema %{
-    connection: [type: [:tuple, :pid, :atom], required: true],
-    retry_delay: [type: :integer, required: true, default: 100],
-    retry_max: [type: :integer, required: true, default: 25],
-    exchanges: [type: {:list, {:keyword, @exchange_schema}}, required: true, default: []],
-    queues: [type: {:list, {:keyword, @queue_schema}}, required: true, default: []],
-    bindings: [type: {:list, {:keyword, @binding_schema}}, required: true, default: []]
-  }
+  @opts_schema KeywordValidator.schema!(
+                 connection: [is: {:one_of, [:tuple, :pid, :atom]}, required: true],
+                 retry_delay: [is: :integer, required: true, default: 100],
+                 retry_max: [is: :integer, required: true, default: 25],
+                 exchanges: [
+                   is: {:list, {:keyword, @exchange_schema}},
+                   required: true,
+                   default: []
+                 ],
+                 queues: [is: {:list, {:keyword, @queue_schema}}, required: true, default: []],
+                 bindings: [is: {:list, {:keyword, @binding_schema}}, required: true, default: []]
+               )
 
   ################################
   # Public API
