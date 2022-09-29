@@ -56,6 +56,7 @@ defmodule Rabbit.MixProject do
         "deps.get",
         "compile --warnings-as-errors",
         "format --check-formatted",
+        "credo --strict",
         "test"
       ]
     ]
