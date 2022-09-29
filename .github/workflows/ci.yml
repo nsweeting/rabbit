@@ -1,3 +1,4 @@
+name: CI
 on:
   push:
     branches:
@@ -13,8 +14,8 @@ jobs:
     name: OTP ${{matrix.otp}} / Elixir ${{matrix.elixir}}
     strategy:
       matrix:
-        otp: ['20', '21', '22', '23', '24', '25']
-        elixir: ['1.8', '1.9', '1.10', '1.11', '1.12', '1.13', '1.14']
+        otp: ['23', '24', '25']
+        elixir: ['1.11', '1.12', '1.13', '1.14']
     steps:
       - uses: actions/checkout@v2
       - run: docker-compose up -d
