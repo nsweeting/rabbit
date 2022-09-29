@@ -12,10 +12,6 @@ jobs:
   test:
     runs-on: ubuntu-latest
     name: Elixir ${{ matrix.elixir }} / OTP ${{ matrix.otp }}
-
-    env:
-      MIX_ENV: test
-
     strategy:
       matrix:
         otp: ['23', '24', '25']
@@ -42,5 +38,4 @@ jobs:
           key: ${{ runner.os }}-${{ matrix.elixir }}-${{ matrix.otp }}-${{ env.MIX_ENV }}-build-mixlockhash-${{ hashFiles(format('{0}{1}', github.workspace, '/mix.lock')) }}
           restore-keys: |
             ${{ runner.os }}-${{ matrix.elixir }}-${{ matrix.otp }}-${{ env.MIX_ENV }}-build-
-      - run: mix deps.get
-      - run: mix test
+      - run: mix ci

@@ -13,7 +13,9 @@ defmodule Rabbit.MixProject do
       description: description(),
       package: package(),
       name: "Rabbit",
-      docs: docs()
+      docs: docs(),
+      aliases: aliases(),
+      preferred_cli_env: preferred_cli_env()
     ]
   end
 
@@ -44,6 +46,25 @@ defmodule Rabbit.MixProject do
       extras: ["README.md"],
       main: "readme",
       source_url: "https://github.com/nsweeting/rabbit"
+    ]
+  end
+
+  # Aliases are shortcuts or tasks specific to the current project.
+  defp aliases do
+    [
+      ci: [
+        "deps.get",
+        "compile --warnings-as-errors",
+        "format --check-formatted",
+        "test"
+      ]
+    ]
+  end
+
+  # Specifies the preferred env for mix commands.
+  defp preferred_cli_env do
+    [
+      ci: :test
     ]
   end
 
