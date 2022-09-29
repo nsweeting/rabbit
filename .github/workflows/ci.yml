@@ -39,4 +39,5 @@ jobs:
           restore-keys: |
             deps-${{ runner.os }}-${{ matrix.otp }}-${{ matrix.elixir }}
   
-      - run: mix ci
+      - name: Run CI
+        run: mix ci
