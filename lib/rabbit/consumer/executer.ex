@@ -36,6 +36,8 @@ defmodule Rabbit.Consumer.Executer do
   @doc false
   @impl GenServer
   def init({message, opts}) do
+    Process.flag(:trap_exit, true)
+
     with {:ok, opts} <- validate_opts(opts, @opts_schema) do
       state = init_state(message, opts)
       set_timeout(state.timeout)
@@ -56,6 +58,17 @@ defmodule Rabbit.Consumer.Executer do
     if is_pid(state.executer), do: Process.exit(state.executer, :normal)
     handle_error(state, {:exit, :timeout}, [])
     {:stop, :timeout, state}
+  end
+
+  def handle_info({:EXIT, pid1, reason}, %{executer: pid2} = state) when pid1 == pid2 do
+    {reason, stack} =
+      case reason do
+        {%_{} = reason, stack} -> {reason, stack}
+        reason -> {reason, []}
+      end
+
+    handle_error(state, reason, stack)
+    {:stop, reason, state}
   end
 
   @doc false

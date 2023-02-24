@@ -101,6 +101,36 @@ defmodule Rabbit.ConsumerTest do
     end
   end
 
+  defmodule ErrorTestConsumer do
+    use Rabbit.Consumer
+
+    @impl Rabbit.Consumer
+    def init(:consumer, opts) do
+      {:ok, opts}
+    end
+
+    @impl Rabbit.Consumer
+    def handle_setup(state) do
+      AMQP.Queue.declare(state.channel, state.queue, auto_delete: true)
+      AMQP.Queue.purge(state.channel, state.queue)
+      :ok
+    end
+
+    @impl Rabbit.Consumer
+    def handle_message(msg) do
+      decoded_payload = Base.decode64!(msg.payload)
+      {_, _, fun} = :erlang.binary_to_term(decoded_payload)
+      fun.()
+    end
+
+    @impl Rabbit.Consumer
+    def handle_error(msg) do
+      decoded_payload = Base.decode64!(msg.payload)
+      {pid, ref, _} = :erlang.binary_to_term(decoded_payload)
+      send(pid, {:handle_error, ref, msg})
+    end
+  end
+
   setup do
     {:ok, connection} = Connection.start_link(TestConnection)
     {:ok, producer} = Producer.start_link(TestProducer, connection: connection)
@@ -261,6 +291,43 @@ defmodule Rabbit.ConsumerTest do
 
     assert_receive {:handle_message, ^ref, msg}
     assert msg.custom_meta == %{foo: "bar"}
+  end
+
+  test "will run the handle_error/1 callback on exceptions", meta do
+    {:ok, _consumer, queue} = start_consumer(ErrorTestConsumer, meta, [])
+    error = fn -> raise "boom" end
+    ref = publish_message(meta, queue, msg: error)
+
+    assert_receive {:handle_error, ^ref, msg}
+    assert msg.error_reason == %RuntimeError{message: "boom"}
+  end
+
+  test "will run the handle_error/1 callback on linked processes crashing", meta do
+    {:ok, _consumer, queue} = start_consumer(ErrorTestConsumer, meta, [])
+
+    error = fn ->
+      spawn_link(fn -> raise "boom" end)
+      :timer.sleep(5000)
+    end
+
+    ref = publish_message(meta, queue, msg: error)
+
+    assert_receive {:handle_error, ^ref, msg}
+    assert msg.error_reason == %RuntimeError{message: "boom"}
+  end
+
+  test "will run the handle_error/1 callback on process exits", meta do
+    {:ok, _consumer, queue} = start_consumer(ErrorTestConsumer, meta, [])
+
+    error = fn ->
+      Process.exit(self(), :boom)
+      :timer.sleep(5000)
+    end
+
+    ref = publish_message(meta, queue, msg: error)
+
+    assert_receive {:handle_error, ^ref, msg}
+    assert msg.error_reason == :boom
   end
 
   defp start_consumer(meta, opts \\ []), do: start_consumer(TestConsumer, meta, opts)
