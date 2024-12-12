@@ -3,8 +3,14 @@ defmodule Rabbit.ConnectionTest do
 
   alias Rabbit.Connection
 
+  @moduletag :capture_log
+
   defmodule TestConnection do
     use Rabbit.Connection
+
+    def start_link(opts) do
+      Rabbit.Connection.start_link(__MODULE__, opts)
+    end
 
     @impl Rabbit.Connection
     def init(_type, opts) do
@@ -39,11 +45,11 @@ defmodule Rabbit.ConnectionTest do
     end
 
     test "returns error when given bad connection options" do
-      assert {:error, _} = Connection.start_link(TestConnection, uri: 1)
+      assert {:error, _} = start_supervised({TestConnection, uri: 1})
     end
 
     test "returns error when given bad pool options" do
-      assert {:error, _} = Connection.start_link(TestConnection, pool_size: "foo")
+      assert {:error, _} = start_supervised({TestConnection, pool_size: "foo"})
     end
   end
 
