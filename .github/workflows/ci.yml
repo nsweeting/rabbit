@@ -10,18 +10,39 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-20.04
     name: Elixir ${{ matrix.elixir }} / OTP ${{ matrix.otp }}
+    runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
-        otp: ['23', '24']
-        elixir: ['1.11', '1.12', '1.13', '1.14']
+        include:
+          # rabbit_common currently does not compile against OTP v27.
+          # This needs to be fixed upstream to achieve compatibility.
+          - otp: 27.x
+            elixir: 1.17.x
+            rabbitmq: 4
+          - otp: 27.x
+            elixir: 1.17.x
+            rabbitmq: 3
+          - otp: 26.x
+            elixir: 1.17.x
+            rabbitmq: 3
+          - otp: 26.x
+            elixir: 1.16.x
+            rabbitmq: 3
+          - otp: 26.x
+            elixir: 1.15.x
+            rabbitmq: 3
+          - otp: 26.x
+            elixir: 1.14.5
+            rabbitmq: 3
+
     steps:
       - name: Checkout
         uses: actions/checkout@v3
 
       - name: Start RabbitMQ
-        run: docker-compose up -d
+        run: docker compose -f docker-compose.rabbitmq${{matrix.rabbitmq}}.yml up -d
 
       - name: Set up Elixir
         uses: erlef/setup-beam@v1
