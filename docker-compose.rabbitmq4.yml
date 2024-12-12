@@ -1,0 +1,5 @@
+services:
+  rabbitmq:
+    image: "rabbitmq:4-alpine"
+    ports:
+      - "5672:5672"

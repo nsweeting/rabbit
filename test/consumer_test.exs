@@ -3,6 +3,8 @@ defmodule Rabbit.ConsumerTest do
 
   alias Rabbit.{Connection, Consumer, Producer}
 
+  @moduletag :capture_log
+
   defmodule TestConnection do
     use Rabbit.Connection
 
@@ -23,6 +25,10 @@ defmodule Rabbit.ConsumerTest do
 
   defmodule TestConsumer do
     use Rabbit.Consumer
+
+    def start_link(opts) do
+      Rabbit.Consumer.start_link(__MODULE__, opts)
+    end
 
     @impl Rabbit.Consumer
     def init(:consumer, opts) do
@@ -144,7 +150,7 @@ defmodule Rabbit.ConsumerTest do
     end
 
     test "returns error when given bad consumer options" do
-      assert {:error, _} = Consumer.start_link(TestConsumer, connection: 1)
+      assert {:error, _} = start_supervised({TestConsumer, connection: 1})
     end
   end
 

@@ -3,6 +3,8 @@ defmodule Rabbit.ConsumerSupervisorTest do
 
   alias Rabbit.{Connection, ConsumerSupervisor}
 
+  @moduletag :capture_log
+
   defmodule TestConnection do
     use Rabbit.Connection
 

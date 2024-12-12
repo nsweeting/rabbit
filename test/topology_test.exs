@@ -3,6 +3,8 @@ defmodule Rabbit.TopologyTest do
 
   alias Rabbit.{Connection, Consumer, Producer, Topology}
 
+  @moduletag :capture_log
+
   defmodule TestConnection do
     use Rabbit.Connection
 
@@ -45,6 +47,10 @@ defmodule Rabbit.TopologyTest do
 
   defmodule TestTopology do
     use Rabbit.Topology
+
+    def start_link(opts) do
+      Rabbit.Topology.start_link(__MODULE__, opts)
+    end
 
     @impl Rabbit.Topology
     def init(:topology, opts) do
@@ -119,12 +125,12 @@ defmodule Rabbit.TopologyTest do
     test "will return an error if there is no connection" do
       {:ok, connection} = TestBadConnection.start_link()
 
-      assert {:error, :no_connection} =
-               Topology.start_link(TestTopology, connection: connection, retry_max: 1)
+      assert {:error, {:no_connection, _}} =
+               start_supervised({TestTopology, connection: connection, retry_max: 1})
     end
 
     test "returns error when given bad topology options" do
-      assert {:error, _} = Topology.start_link(TestTopology, connection: 1)
+      assert {:error, _} = start_supervised({TestTopology, connection: 1})
     end
   end
 

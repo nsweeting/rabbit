@@ -3,6 +3,8 @@ defmodule Rabbit.ProducerTest do
 
   alias Rabbit.{Connection, Producer}
 
+  @moduletag :capture_log
+
   defmodule TestConnection do
     use Rabbit.Connection
 
@@ -14,6 +16,10 @@ defmodule Rabbit.ProducerTest do
 
   defmodule TestProducer do
     use Rabbit.Producer
+
+    def start_link(opts) do
+      Rabbit.Producer.start_link(__MODULE__, opts)
+    end
 
     @impl Rabbit.Producer
     def init(_type, opts) do
@@ -42,7 +48,7 @@ defmodule Rabbit.ProducerTest do
     end
 
     test "returns error when given bad producer options" do
-      {:error, _} = Producer.start_link(TestProducer, connection: "foo")
+      {:error, _} = start_supervised({TestProducer, connection: "foo"})
     end
 
     test "returns error when given bad pool options" do

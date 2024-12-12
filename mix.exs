@@ -1,13 +1,13 @@
 defmodule Rabbit.MixProject do
   use Mix.Project
 
-  @version "0.20.0"
+  @version "0.21.0"
 
   def project do
     [
       app: :rabbit,
       version: @version,
-      elixir: "~> 1.7",
+      elixir: "~> 1.14",
       start_permanent: Mix.env() == :prod,
       deps: deps(),
       description: description(),
@@ -72,14 +72,13 @@ defmodule Rabbit.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      {:amqp, "~> 3.0"},
+      {:amqp, "~> 4.0"},
       {:poolboy, "~> 1.5"},
       {:keyword_validator, "~> 2.0"},
-      {:jason, "~> 1.2", optional: true},
+      {:jason, "~> 1.4", optional: true},
       {:benchee, "~> 1.0", only: :dev, runtime: false},
       {:dialyxir, "~> 1.0", only: [:dev, :test], runtime: false},
-      {:credo, "~> 1.6", only: [:dev, :test], runtime: false},
-      {:inch_ex, github: "rrrene/inch_ex", only: [:dev, :test], runtime: false},
+      {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:ex_doc, "~> 0.28", only: :dev, runtime: false}
     ]
   end
