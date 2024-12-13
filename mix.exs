@@ -72,7 +72,7 @@ defmodule Rabbit.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      {:amqp, "~> 4.0"},
+      {:amqp, "~> 3.3"},
       {:poolboy, "~> 1.5"},
       {:keyword_validator, "~> 2.0"},
       {:jason, "~> 1.4", optional: true},
