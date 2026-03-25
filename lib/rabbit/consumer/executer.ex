@@ -90,14 +90,23 @@ defmodule Rabbit.Consumer.Executer do
 
   @impl GenServer
   def terminate(_reason, %{completed: false, message: message} = state) do
-    if state.task do
-      Task.shutdown(state.task, 5_000)
-    end
+    result =
+      if state.task do
+        Task.shutdown(state.task, 5_000)
+      end
 
-    try do
-      Message.nack(message, requeue: true)
-    catch
-      _, _ -> :ok
+    # Only nack if the task did not complete within the grace period.
+    # {:ok, _} means the task finished - it already acked/nacked inside its body.
+    case result do
+      {:ok, _} ->
+        :ok
+
+      _ ->
+        try do
+          Message.nack(message, requeue: true)
+        catch
+          _, _ -> :ok
+        end
     end
 
     :ok
