@@ -20,7 +20,8 @@ defmodule Rabbit.Consumer.Executer do
     %{
       id: __MODULE__,
       start: {__MODULE__, :start_link, args},
-      restart: :temporary
+      restart: :temporary,
+      shutdown: 25_000
     }
   end
 
@@ -57,7 +58,7 @@ defmodule Rabbit.Consumer.Executer do
   def handle_info(:timeout, state) do
     if is_pid(state.executer), do: Process.exit(state.executer, :normal)
     handle_error(state, {:exit, :timeout}, [])
-    {:stop, :timeout, state}
+    {:stop, :timeout, %{state | completed: true}}
   end
 
   def handle_info({:EXIT, pid1, reason}, %{executer: pid2} = state) when pid1 == pid2 do
@@ -68,14 +69,31 @@ defmodule Rabbit.Consumer.Executer do
       end
 
     handle_error(state, reason, stack)
-    {:stop, reason, state}
+    {:stop, reason, %{state | completed: true}}
   end
 
   @doc false
   @impl GenServer
   def handle_cast({:complete, ref1}, %{executer_ref: ref2} = state) when ref1 == ref2 do
-    {:stop, :normal, state}
+    {:stop, :normal, %{state | completed: true}}
   end
+
+  @impl GenServer
+  def terminate(_reason, %{completed: false, message: message} = state) do
+    if is_pid(state.executer) and Process.alive?(state.executer) do
+      Process.exit(state.executer, :kill)
+    end
+
+    try do
+      Message.nack(message, requeue: true)
+    catch
+      _, _ -> :ok
+    end
+
+    :ok
+  end
+
+  def terminate(_reason, _state), do: :ok
 
   ################################
   # Private Functions
@@ -87,7 +105,8 @@ defmodule Rabbit.Consumer.Executer do
     |> Map.merge(%{
       executer: nil,
       executer_ref: nil,
-      message: message
+      message: message,
+      completed: false
     })
   end
 
