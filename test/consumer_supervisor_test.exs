@@ -80,4 +80,17 @@ defmodule Rabbit.ConsumerSupervisorTest do
     assert {:ok, consumer_sup} = ConsumerSupervisor.start_link(TestConsumers)
     assert [_, _] = Supervisor.which_children(consumer_sup)
   end
+
+  describe "child specs" do
+    test "consumer server children have shutdown of 30_000" do
+      assert {:ok, consumer_sup} = ConsumerSupervisor.start_link(TestConsumers)
+
+      children = Supervisor.which_children(consumer_sup)
+
+      for {id, _pid, :worker, _modules} <- children do
+        {:ok, spec} = :supervisor.get_childspec(consumer_sup, id)
+        assert spec.shutdown == 30_000
+      end
+    end
+  end
 end

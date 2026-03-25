@@ -286,19 +286,36 @@ defmodule Rabbit.Consumer.Server do
     end
 
     state
+    |> cancel_consumer()
     |> stop_workers()
     |> close_channel()
   end
 
+  defp cancel_consumer(%{consuming: true, channel_open: true} = state) do
+    try do
+      AMQP.Basic.cancel(state.channel, state.consumer_tag)
+    catch
+      _, _ -> :ok
+    end
+
+    %{state | consuming: false}
+  end
+
+  defp cancel_consumer(state), do: state
+
   defp stop_workers(state) do
     if state.workers_started do
-      Enum.each(state.workers, fn worker ->
-        try do
-          :ok = Worker.stop(worker)
-        catch
-          _, _ -> :ok
-        end
+      state.workers
+      |> Enum.map(fn worker ->
+        Task.async(fn ->
+          try do
+            Worker.stop(worker)
+          catch
+            _, _ -> :ok
+          end
+        end)
       end)
+      |> Task.await_many(25_000)
     end
 
     %{state | workers: nil, workers_started: false}

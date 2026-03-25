@@ -69,7 +69,11 @@ defmodule Rabbit.Broker.Supervisor do
     name = Broker.consumers(module)
     opts = Keyword.get(opts, :consumers, [])
     opts = Enum.map(opts, &Keyword.put(&1, :connection, conn))
-    spec = build_spec(Rabbit.Consumer.Supervisor, name, module, opts)
+
+    spec =
+      Rabbit.Consumer.Supervisor
+      |> build_spec(name, module, opts)
+      |> Map.put(:type, :supervisor)
 
     children ++ [spec]
   end

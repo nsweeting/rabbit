@@ -35,7 +35,13 @@ defmodule Rabbit.Consumer.Supervisor do
 
   defp build_children(module, [consumer | consumers], children) do
     id = children |> Enum.count() |> to_string() |> String.to_atom()
-    spec = %{id: id, start: {Rabbit.Consumer, :start_link, [module, consumer]}}
+
+    spec = %{
+      id: id,
+      start: {Rabbit.Consumer, :start_link, [module, consumer]},
+      shutdown: 30_000
+    }
+
     children = children ++ [spec]
     build_children(module, consumers, children)
   end
