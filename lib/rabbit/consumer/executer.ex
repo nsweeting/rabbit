@@ -50,18 +50,26 @@ defmodule Rabbit.Consumer.Executer do
   @impl GenServer
   def handle_continue(:run, state) do
     state = run(state)
-    {:noreply, state, state.timeout}
+    {:noreply, state}
   end
 
   @doc false
   @impl GenServer
   def handle_info(:timeout, state) do
-    if is_pid(state.executer), do: Process.exit(state.executer, :normal)
+    Task.shutdown(state.task, :brutal_kill)
     handle_error(state, {:exit, :timeout}, [])
     {:stop, :timeout, %{state | completed: true}}
   end
 
-  def handle_info({:EXIT, pid1, reason}, %{executer: pid2} = state) when pid1 == pid2 do
+  def handle_info({ref, _result}, %{task: %Task{ref: ref}} = state) do
+    # Task completed successfully - the task body already did ack/nack.
+    # Flush the :DOWN message that Task.async sends after completion.
+    Process.demonitor(ref, [:flush])
+    {:stop, :normal, %{state | completed: true}}
+  end
+
+  def handle_info({:DOWN, ref, :process, _pid, reason}, %{task: %Task{ref: ref}} = state) do
+    # Task crashed before completing. Run error handler.
     {reason, stack} =
       case reason do
         {%_{} = reason, stack} -> {reason, stack}
@@ -72,16 +80,18 @@ defmodule Rabbit.Consumer.Executer do
     {:stop, reason, %{state | completed: true}}
   end
 
-  @doc false
-  @impl GenServer
-  def handle_cast({:complete, ref1}, %{executer_ref: ref2} = state) when ref1 == ref2 do
-    {:stop, :normal, %{state | completed: true}}
+  def handle_info({:EXIT, _, _}, state) do
+    # Task.async links to the caller. Since we trap exits, we receive
+    # EXIT messages from the task process. The actual result/crash is
+    # handled via the task ref and :DOWN messages above, so we ignore
+    # EXIT signals here.
+    {:noreply, state}
   end
 
   @impl GenServer
   def terminate(_reason, %{completed: false, message: message} = state) do
-    if is_pid(state.executer) and Process.alive?(state.executer) do
-      Process.exit(state.executer, :kill)
+    if state.task do
+      Task.shutdown(state.task, 5_000)
     end
 
     try do
@@ -103,8 +113,7 @@ defmodule Rabbit.Consumer.Executer do
     opts
     |> Enum.into(%{})
     |> Map.merge(%{
-      executer: nil,
-      executer_ref: nil,
+      task: nil,
       message: message,
       completed: false
     })
@@ -119,11 +128,8 @@ defmodule Rabbit.Consumer.Executer do
   end
 
   defp run(state) do
-    parent = self()
-    ref = make_ref()
-
-    executer =
-      spawn_link(fn ->
+    task =
+      Task.async(fn ->
         try do
           message = decode_payload!(state.message)
           consumer_callback(state, :handle_message, [message])
@@ -132,11 +138,9 @@ defmodule Rabbit.Consumer.Executer do
         catch
           msg, reason -> handle_error(state, {msg, reason}, __STACKTRACE__)
         end
-
-        GenServer.cast(parent, {:complete, ref})
       end)
 
-    %{state | executer: executer, executer_ref: ref}
+    %{state | task: task}
   end
 
   defp decode_payload!(message) do
